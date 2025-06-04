@@ -1,0 +1,15 @@
+# Python
+FROM python:latest
+
+# Delovna mapa
+WORKDIR /app
+
+# V vsebnik dodamo python skripto
+COPY server.py .
+
+# Namestitev potrebnih knjižnic
+RUN pip install 'paho-mqtt>=2.0.0'
+
+# Ukaz, ki se izvede ob zagonu kontejnerja
+# Zastavica -u (unbuffered output) - da izpis vidimo v docker log
+CMD ["python", "-u", "./server.py"]
