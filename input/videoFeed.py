@@ -3,6 +3,20 @@ import cv2
 import time
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
+import paho.mqtt.client as mqtt
+
+broker = "10.241.227.26"
+port = 1883
+topic = "/data"
+
+
+def on_connect(client, userdata, flags, reasonCode, properties=None):
+  print("Povezava z MQTT: " + str(reasonCode))
+
+producer = mqtt.Client(client_id="videoFeed", callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+producer.connect(broker, port, 60)
+producer.on_connect = on_connect
+
 
 class VideoFeed:
     def __init__(self, master):
@@ -87,7 +101,8 @@ class VideoFeed:
         stream_loop()
 
     def send_frame_to_server(self, frame_num, frame):
-        print(f"Sent frame {frame_num} to server")
+        ret = producer.publish(topic, frame, qos=1, retain=False)
+        print("Pošiljanje: " + frame_num + " " + str(ret.rc))
 
 if __name__ == '__main__':
     root = tk.Tk()
