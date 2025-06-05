@@ -48,8 +48,7 @@ fps_time = 0
 
 
 """ SORT SETUP """
-from sortn import *
-mot_tracker = Sort()
+
 
 """ DENSENET SETUP """
 

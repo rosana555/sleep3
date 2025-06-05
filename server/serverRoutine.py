@@ -41,6 +41,8 @@ def main():
     # Uninstall old YOLO versions and install new one
     run([sys.executable, "-m", "pip", "uninstall", "-y", "yolov3_tf2", "keras-yolo3"])
     run([sys.executable, "-m", "pip", "install", "ultralytics"])
+    run([sys.executable, "-m", "pip", "install", "paho-mqtt"])
+
 
     """ TF-pose dependencies setup """
 
@@ -99,7 +101,7 @@ def main():
 
     print("DONE")
     server_path = base_path / "server" / "server.py"
-    run(["python", f"{server_path}"])
+    run([sys.executable, f"{server_path}"])
 
 
 if __name__ == "__main__":
