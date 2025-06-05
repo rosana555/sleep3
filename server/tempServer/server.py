@@ -1,9 +1,26 @@
+from pathlib import Path
+import cv2
+import paho.mqtt.client as mqtt
+import numpy as np
+import tensorflow as tf
+import os
+import slidingwindow
+
+
+#TODO: fix the path to slep3volvo
+base_path = Path.cwd()
+sleep3volvo_path = base_path / 'sleep3-volvo'
+print(sleep3volvo_path)
+
 # TODO: add all the flags
 #  also add the KEYPOINT_CONFIDENCE_THRESHOLD = 0.2
 #  And add a GPU check (physical_devices) but dunno if here or if in the routine
 
-import opencv as cv2
-import paho.mqtt.client as mqtt
+
+import sys
+print("sys.executable =", sys.executable)
+print("sys.path:", "\n  ".join(sys.path))
+
 
 
 """ PROCESSING CLASS """
@@ -16,6 +33,10 @@ class Processor:
 
 
 """ YOLO SETUP """
+
+
+
+
 
 
 """ POSE ESTIMATION SETUP """
@@ -31,10 +52,16 @@ tf_config = tf.compat.v1.ConfigProto(
     )
 )
 
+tf_pose_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '..', 'sleep3-volvo', 'tf-pose-estimation'))
+
+if tf_pose_path not in sys.path:
+    sys.path.insert(0, tf_pose_path)
+
+
 from tf_pose.estimator import TfPoseEstimator
 from tf_pose.networks import get_graph_path
 
-graph_path = get_graph_path('mobilenet_thin')
+graph_path = get_graph_path('mobilenet_thin', sleep3volvo_path)
 
 pose_model = TfPoseEstimator(
     graph_path,
@@ -70,7 +97,7 @@ def load_densenet_model():
         pass
 
     # Fallback to JSON loading
-    with open('densenet_model.json', 'r') as f:
+    with open(f'{sleep3volvo_path}/densenet_model.json', 'r') as f:
         model = tf.keras.models.model_from_json(
             f.read(),
             custom_objects={'Model': tf.keras.Model}
@@ -127,4 +154,6 @@ server.loop_forever()
 
 
 
-print("Running server!!!")
+
+
+print(f"Running server!!! Base path: {sleep3volvo_path}")
