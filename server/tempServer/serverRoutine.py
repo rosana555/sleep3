@@ -16,8 +16,6 @@ def run(cmd, cwd=None, shell=False):
 
 def main():
     base_path = Path.cwd()
-    print(f"Current working directory: {base_path}")
-
     repo_url = "https://github.com/rosana555/sleep3-volvo"
     repo_name = "sleep3-volvo"
     clone_dir = base_path / repo_name
@@ -28,8 +26,7 @@ def main():
         #print(f"Removing existing directory {clone_dir}")
         #shutil.rmtree(clone_dir, onerror=handle_remove_readonly)
     else:
-        print("Doesnt exist")
-        run(["git", "clone", repo_url, base_path])
+        run(["git", "clone", repo_url])
     #run(["git", "clone", repo_url])
 
 
@@ -40,14 +37,10 @@ def main():
     run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], cwd=tf_pose_path)
     run([sys.executable, "-m", "pip", "install", "filterpy"])
     run([sys.executable, "-m", "pip", "install", "tensorflow"])
-    run([sys.executable, "-m", "pip", "install", "opencv-python"])
 
     # Uninstall old YOLO versions and install new one
     run([sys.executable, "-m", "pip", "uninstall", "-y", "yolov3_tf2", "keras-yolo3"])
     run([sys.executable, "-m", "pip", "install", "ultralytics"])
-    run([sys.executable, "-m", "pip", "install", "paho-mqtt"])
-    run([sys.executable, "-m", "pip", "install", "slidingwindow"])
-
 
     """ TF-pose dependencies setup """
 
@@ -106,7 +99,7 @@ def main():
 
     print("DONE")
     server_path = base_path / "server" / "tempServer" / "server.py"
-    run([sys.executable, f"{server_path}"])
+    run(["python", f"{server_path}"])
 
 
 if __name__ == "__main__":
