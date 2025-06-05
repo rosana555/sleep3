@@ -7,7 +7,7 @@ import paho.mqtt.client as mqtt
 
 broker = "10.241.227.26"
 port = 1883
-topic = "/data"
+topic = "/input" #TODO: spremeni za mqtt broker (prev: 10.241.227.26)
 
 
 def on_connect(client, userdata, flags, reasonCode, properties=None):
