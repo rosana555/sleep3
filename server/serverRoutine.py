@@ -32,7 +32,7 @@ def main():
 
     # Install
     tf_pose_path = clone_dir / "tf-pose-estimation"
-    run(["pip", "install", "--upgrade", "numpy<2"])
+    run([sys.executable, "-m", "pip", "install", "--upgrade", "numpy<2"])
     #run(["pip3", "install", "-r", "requirements.txt"], cwd=tf_pose_path)
     run([sys.executable, "-m", "pip", "install", "-r", "requirements.txt"], cwd=tf_pose_path)
     run([sys.executable, "-m", "pip", "install", "filterpy"])
