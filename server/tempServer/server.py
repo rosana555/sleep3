@@ -513,7 +513,6 @@ outputChannel = "/output"
 
 
 curFrames = deque(maxlen=16)  # Automatically discards oldest when >16
-processor = Processor()
 stats = Statistics()
 initialized = False
 frame_ind = 0
