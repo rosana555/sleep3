@@ -99,7 +99,7 @@ def main():
 
     print("DONE")
     server_path = base_path / "server" / "tempServer" / "server.py"
-    run(["python", f"{server_path}"])
+    run([sys.executable, f"{server_path}"])
 
 
 if __name__ == "__main__":
