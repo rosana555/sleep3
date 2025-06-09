@@ -7,15 +7,17 @@ import paho.mqtt.client as mqtt
 
 broker = "10.241.227.26"
 port = 1883
-topic = "/input" #TODO: spremeni za mqtt broker (prev: 10.241.227.26)
+topic = "/input"
 
 
 def on_connect(client, userdata, flags, reasonCode, properties=None):
   print("Povezava z MQTT: " + str(reasonCode))
 
 producer = mqtt.Client(client_id="videoFeed", callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
-producer.connect(broker, port, 60)
+producer.max_inflight_messages_set(10000)
+producer.connect(broker, port, 18000) # 20 minutes
 producer.on_connect = on_connect
+
 
 
 class VideoFeed:
@@ -101,8 +103,21 @@ class VideoFeed:
         stream_loop()
 
     def send_frame_to_server(self, frame_num, frame):
-        ret = producer.publish(topic, frame, qos=1, retain=False)
-        print("Pošiljanje: " + frame_num + " " + str(ret.rc))
+        # 1) Encode to JPEG
+        success, buffer = cv2.imencode('.jpg', frame)
+        if not success:
+            print(f"Failed to encode frame {frame_num}")
+            return
+
+        # 2) Convert to bytes
+        payload = buffer.tobytes()
+
+        # 3) Publish the bytes
+        ret = producer.publish(topic, payload, qos=1, retain=False)
+
+        # 4) Log
+        print(f"Pošiljanje: frame {frame_num}  rc={ret.rc}, topic: {topic}")
+
 
 if __name__ == '__main__':
     root = tk.Tk()
