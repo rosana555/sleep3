@@ -10,7 +10,7 @@ import slidingwindow
 from ultralytics import YOLO
 from collections import deque, defaultdict
 import queue, threading
-import csv
+import json
 from prometheus_client import start_http_server, Counter, Gauge
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__),
@@ -33,8 +33,7 @@ base_path = Path.cwd()
 sleep3volvo_path = base_path / 'sleep3-volvo'
 print(sleep3volvo_path)
 
-# TODO: add all the flags
-#  And add a GPU check (physical_devices) but dunno if here or if in the routine
+# TODO: And add a GPU check (physical_devices) but dunno if here or if in the routine
 
 
 import sys
@@ -65,7 +64,6 @@ pose_time = Gauge('pose_time', 'Time needed for openpose to detect skeletons, in
 intent_time = Gauge('intent_time', 'Time needed for intent detection, in seconds')
 process_frame_time = Gauge('process_frame_time', 'Time needed for processing a frame, in seconds')
 
-#TODO: add
 
 """ STATISTICS CLASS """
 
@@ -195,8 +193,6 @@ class Statistics:
         actual_crossings = sum(1 for t in self.track_data.values() if t['has_crossed'])
         num_actual_crossings.set(actual_crossings)
 
-
-
         #print("here1")
 
         # Calculate various metrics
@@ -204,7 +200,6 @@ class Statistics:
         avg_detected_people_per_frame.set(avg_people_per_sec)
 
 
-        # TODO uncomment
         num_detected_crossings.set(self.total_crossing_events)
 
         avg_crossings_per_sec = actual_crossings / elapsed if elapsed > 0 else 0
@@ -604,7 +599,7 @@ def processFrames(frame, frame_ind, debug=False):
             pred = int(pred_func(arr))
             predictions[tid] = pred
             track_intent[tid] = pred
-            is_cross_pred = (pred == 1)
+            is_cross_pred = (pred == 1) #also think this is useless and could just be replaced w pred
 
             # DEBUG: save prediction data
             if debug and debug_log:
@@ -612,6 +607,9 @@ def processFrames(frame, frame_ind, debug=False):
                 mosaic = np.hstack([cv2.resize(f, (50, 50)) for f in seq])
                 cv2.imwrite(f"{debug_path}/frame_{frame_ind:06d}_track_{tid}_sequence.jpg", mosaic)
                 print(f"Track {tid}: {'CROSSING' if is_cross_pred else 'NOT CROSSING'}", file=debug_log)
+        else:
+            pass
+            #TODO: Žan fix this
     t_intent = time.time() - t0
 
     # 5) annotate frame with center line
@@ -631,6 +629,13 @@ def processFrames(frame, frame_ind, debug=False):
         if debug_log:
             print("Summary:", summary, file=debug_log)
             debug_log.close()
+    summary = {
+        'frame': frame_ind,
+        'num_tracks': int(len(last_trackers)),
+        'num_crossing_pred': int(num_crossing_pred),
+        'predictions': predictions,
+    }
+    print(f"SUMMARY: {summary}")
 
     # 7) cleanup old tracks
     active = {int(t[4]) for t in last_trackers}
@@ -658,130 +663,10 @@ def processFrames(frame, frame_ind, debug=False):
         t_other,
         time.time() - t_start
     )
+    print(f"FINAL PREDICTIONS: {predictions}")
 
-    return [annotated], predictions
+    return annotated, predictions
 
-def processFrames_old(frame, frame_ind, debug=False):
-    global mot_tracker, rolling_buffer, stats, track_intent, video_writer
-
-    img_orig = frame.copy()
-
-
-    # 1) human detection
-    detections = detect_humans(img_orig, YOLO_CONFIDENCE_THRESHOLD)
-
-    # 2) update tracker & remember trackers for this frame
-    trackers = mot_tracker.update(detections).astype(int)
-    last_trackers = trackers.copy()
-
-    # 2.1) DEBUG: start/create debug file
-    if debug:
-        os.makedirs(debug_path, exist_ok=True)
-        debug_log = open(f"{debug_path}/frame_{frame_ind:06d}_log.txt", "w")
-        print(f"\n=== Frame {frame_ind} ===", file=debug_log)
-
-    # 3) for each tracked person detect pose, create overlay and update rolling_buffer
-    for x1,y1,x2,y2,tid in trackers:
-        crop = img_orig[y1:y2, x1:x2]  #crop out the tracked person: TODO: danaj
-        if crop.size == 0:
-            continue
-
-        if is_blurry(crop): #if the image is blurry, sharpen it
-            crop = sharpen_image(crop)
-
-        # pad and resize pedestrian crop, so pose estimation estimates better
-        crop_resized = resize_with_padding(crop, (432,368))
-
-        # 4) predict pose
-        poses = pose_model.inference(
-            crop_resized, resize_to_default=False, upsample_size=resize_out_ratio
-        )
-
-        # filter low‐score keypoints
-        for h in poses:
-            for k in list(h.body_parts):
-                if h.body_parts[k].score < KEYPOINT_CONFIDENCE_THRESHOLD:
-                    del h.body_parts[k]
-        poses.sort(key=lambda h: h.score, reverse=True)
-
-        # draw skeleton & overlay
-        padded = TfPoseEstimator.draw_humans(crop_resized, poses, imgcopy=True)
-        skeleton = remove_padding(padded, crop.shape[:2], (432,368))
-
-        target_slice = img_orig[y1:y2, x1:x2]
-        th, tw = target_slice.shape[:2]
-        try:
-            skeleton_resized = cv2.resize(skeleton, (tw, th))
-            img_orig[y1:y2, x1:x2] = skeleton_resized   # draw the detected skeleton onto the original image
-        except cv2.error as e:
-            print(f"Skipping skeleton paste for track {tid}: {e}")
-
-        # update rolling buffer
-        buf_img = cv2.resize(img_orig[y1:y2, x1:x2], (100,100)) # prepare the image for the rolling buffer
-        rolling_buffer.setdefault(tid, deque(maxlen=16)).append(buf_img) # add to the rolling buffer (max 16)
-
-        # DEBUG: save crops and estimated pose
-        if debug:
-            cv2.imwrite(f"{debug_path}/frame_{frame_ind:06d}_track_{tid}_crop.jpg", crop)
-            cv2.imwrite(f"{debug_path}/frame_{frame_ind:06d}_track_{tid}_skeleton.jpg", skeleton)
-
-    # 5) intent prediction for any trackID with a full buffer
-    predictions = {} # prediction for each ID
-    num_crossing = 0 # number of people who are crossing -> for statistics TODO: change
-    stats.get_summary()
-    for x1,y1,x2,y2,tid in last_trackers:
-        seq = list(rolling_buffer.get(tid, []))
-        if len(seq) == 16:
-            arr = np.stack(seq, axis=2)[None,...]
-            pred = int(pred_func(arr))
-            predictions[tid] = pred
-            track_intent[tid] = pred
-            is_cross = (pred == 1)
-            stats.update_track(tid, frame_ind, is_cross)
-            if is_cross:
-                num_crossing += 1
-
-            # debug: save input & mosaic
-            if debug:
-                np.save(f"{debug_path}/frame_{frame_ind:06d}_track_{tid}_input.npy", arr)
-                mosaic = np.hstack([cv2.resize(f, (50,50)) for f in seq])
-                cv2.imwrite(f"{debug_path}/frame_{frame_ind:06d}_track_{tid}_sequence.jpg", mosaic)
-                print(f"Track {tid}: {'CROSSING' if is_cross else 'NOT CROSSING'}", file=debug_log)
-        else:
-            print(f"WARNING: not enough frames in rolling buffer for track {tid}")
-            #TODO: add frame duplication
-
-    # 4) annotate frame
-    annotated = annotate_frame(img_orig.copy(), last_trackers, track_intent)
-
-    # 5) stats & debug
-    stats.update_frame(frame_ind, len(last_trackers), num_crossing)
-    if debug:
-        cv2.imwrite(f"{debug_path}/frame_{frame_ind:06d}_annotated.jpg", annotated)
-        summary = {
-            'frame': frame_ind,
-            'num_tracks': int(len(last_trackers)),
-            'num_crossing': int(num_crossing),
-            'predictions': predictions,
-        }
-        print("Summary:", summary, file=debug_log)
-        debug_log.close()
-
-    # 6) cleanup old tracks
-    active = { int(t[4]) for t in last_trackers }
-    for tid in list(rolling_buffer):
-        if tid not in active:
-            rolling_buffer.pop(tid, None)
-            track_intent.pop(tid, None)
-            if debug:
-                # reopen log so file handle still valid
-                with open(f"{debug_path}/cleanup.log", "a") as lg:
-                    print(f"Cleaned track {tid}", file=lg)
-
-    # 7) write to your shared video_writer
-    update_video_writer([annotated])
-
-    return [annotated], predictions
 
 
 """ INICIALIZACIJA MQTT """
@@ -793,33 +678,84 @@ outputChannel = "/output"
 
 
 curFrames = deque(maxlen=16)  # Automatically discards oldest when >16
-stats = Statistics()
+#stats = Statistics()
 initialized = False
 frame_ind = 0
 msg_queue = queue.Queue()
 vid_ind = 0
 
 
+""" PUBLISHING FUNCTIONS """
+def publish_frame(frame):
+    if isinstance(frame, int):
+        payload = frame
+        ret = server.publish(f"{outputChannel}/frames", payload, qos=1, retain=False)
+        print(f"Pošiljanje: sporočilo o koncu, rc={ret.rc}, topic: {outputChannel}/frames")
+        return
 
-## TEMP FUNCTION, might use:
-def publish_frame(client, topic, frame):
+    # 1) Encode to JPEG
     success, buffer = cv2.imencode('.jpg', frame)
     if not success:
-        print("Failed to encode frame for publishing")
+        print(f"Failed to encode frame")
         return
+
+    # 2) Convert to bytes
     payload = buffer.tobytes()
-    client.publish(f"{outputChannel}/frames", payload, qos=1)
 
-def publish_predictions(client, topic, predictions):
-    pass
+    # 3) Publish the bytes
+    ret = server.publish(f"{outputChannel}/frames", payload, qos=1, retain=False)
 
-def publish_statistic(client, topic, stats):
-    pass
+    # 4) Log
+    print(f"Pošiljanje: frame rc={ret.rc}, topic: {outputChannel}/frames")
+
+
+def publish_predictions(predictions):
+    """
+    Publish crossing predictions as a dictionary {track_id: 1}
+    Example: {55: 1, 56: 1} means tracks 55 and 56 are crossing
+    """
+    try:
+        print(f"PREDICTIONS: {predictions}")
+
+        # Handle empty predictions case
+        if not predictions:
+            predictions = {}  # Ensure empty dict if None or empty
+
+        if not isinstance(predictions, dict):
+            raise ValueError("Predictions must be a dictionary {track_id: 1}")
+
+        track_list = [int(track_id) for track_id, crossing_status in predictions.items() if crossing_status == 1]
+
+        payload = json.dumps(track_list)
+        ret = server.publish(f"{outputChannel}/preds", payload, qos=1, retain=False)
+        print(f"SENT TRACK PREDICTIONS: {payload}")
+
+        if len(track_list) > 0:
+            print(f"PREDICTIONS NON 0:  {predictions}")
+        print(f"Sent predictions: {predictions}, rc={ret.rc}")
+    except Exception as e:
+        print(f"Error publishing predictions: {e}")
+
+
+def publish_statistic():
+    """
+    Publish tracking statistics using stats.get_summary()
+    stats_object: The instance that has get_summary() method
+    """
+    global stats
+    try:
+        if not hasattr(stats, 'get_summary'):
+            raise ValueError("stats_object must have get_summary() method")
+
+        send_stats = stats.get_summary()
+        payload = json.dumps(send_stats)
+        ret = server.publish(f"{outputChannel}/stats", payload, qos=1, retain=False)
+        print(f"Sent statistics, rc={ret.rc}")
+    except Exception as e:
+        print(f"Error publishing statistics: {e}")
 
 
 def on_message(client, userdata, msg):
-    # TODO: 0 -> end of video, -1 -> shutdown
-    #  on end of video the buffer should be cleaned?? And the output video?? and the statistics should be renewed??
     global curFrames, stats, initialized, frame_ind, msg_queue, output_video_path, video_writer, vid_ind
 
     try:
@@ -872,6 +808,24 @@ def worker_loop():
 
             # on first 16 messages you still only need to call processFrames on the *one* new frame
             processed, preds = processFrames(img, frame_ind, debug=False)
+            print("Publishing predictions")
+            try:
+                print("Publishing FRAME")
+                publish_frame(processed)
+            except Exception as e:
+                pass
+
+            try:
+                print("Publishing PREDS")
+                publish_predictions(preds)
+            except Exception as e:
+                pass
+
+            try:
+                print("Publishing STATS")
+                publish_statistic()
+            except Exception as e:
+                pass
             initialized = True
 
         except Exception as e:
@@ -890,7 +844,7 @@ def on_connect(client, userdata, flags, rc, properties=None):
 
 server = mqtt.Client(client_id="server", clean_session=True, callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
 
-server.connect(broker, port, 18000)
+server.connect(broker, port, 32000)
 #server.max_inflight_messages_set(10000)
 
 
