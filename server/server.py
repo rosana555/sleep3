@@ -119,7 +119,8 @@ def send_isCrossing_to_server(predict):
   print(f"Pošiljanje  {predict}: {ret.rc}")
 
 server = mqtt.Client("server")
-server.connect(broker, port)
+server.connect(broker, port, 18000)
+server.max_inflight_messages_set(10000)
 
 #povezava na kanal, kjer bo server pridobival frames
 server.subscribe(inputChannel)
