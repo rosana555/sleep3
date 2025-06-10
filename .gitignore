@@ -172,3 +172,8 @@ cython_debug/
 
 # PyPI configuration file
 .pypirc
+sleep3-volvo/
+/debug_output
+.idea/workspace.xml
+output_video.avi
+output_video.avi
