@@ -1,0 +1,57 @@
+services:
+  # Start Mosquitto MQTT
+  mosquitto:
+    image: eclipse-mosquitto   # Ime slike
+    container_name: mosquitto  # Ime kontejnerja
+    ports:
+      - "1883:1883"            # MQTT privzeti port
+    volumes:                   # Priklop konfiguracijske datoteke v kontejner
+      - ./data_mosquitto:/etc/mosquitto                                   
+      - ./data_mosquitto/mosquitto.conf:/mosquitto/config/mosquitto.conf  # Potrebno ustvariti datoteko mosquitto.conf
+    networks:
+      - sleep3-net               # Nastavimo omrežje
+
+  # Start Mosquitto MQTT Exporter
+  exporter:
+    image: sapcc/mosquitto-exporter    # Ime slike
+    container_name: mosquitto-exporter # Ime kontejnerja
+    ports:
+      - "9234:9234"                    # Exporter privzeti port
+    environment:                       # Nastavitev naslova za MQTT broker
+      - "BROKER_ENDPOINT=tcp://mosquitto:1883"
+    networks:
+      - sleep3-net               # Nastavimo omrežje
+
+  # Start Prometheus
+  prometheus:
+    image: prom/prometheus     # Ime slike
+    container_name: prometheus # Ime kontejnerja
+    ports:
+      - "9090:9090"            # Prometheus privzeti port
+    volumes:                   # Priklop konfiguracijske datoteke v kontejner
+      - ./data_prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    networks:
+      - sleep3-net               # Nastavimo omrežje
+
+  # Start Grafana
+  grafana:
+    image: grafana/grafana     # Ime slike
+    container_name: grafana    # Ime kontejnerja
+    ports:
+     - "3000:3000"             # Grafana privzeti port
+    networks:
+      - sleep3-net               # Nastavimo omrežje
+
+networks:           
+  sleep3-net:                    # Ustvarimo omrežje z imenom sleep3-net
+    name: sleep3-net
+
+    # Vsebina datoteke mosquitto.conf
+    # allow_anonymous true                   # Omogočimo anonimni dostop
+    # listener 1883                          # Nastavimo port
+
+    # OPCIJSKO
+    # persistence true                       # Nastavimo, da se podatki vrst shranjujejo na disk (namesto v pomnilnik)
+    # persistance_location /mosquitto/data/  # Pot za shranjevanje vrst na disk
