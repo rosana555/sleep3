@@ -11,11 +11,14 @@ from ultralytics import YOLO
 from collections import deque, defaultdict
 import queue, threading
 import csv
+from prometheus_client import start_http_server, Counter, Gauge
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__),
                                          '..',    # up from tempServer
                                          '..',    # up from server
                                          'sleep3-volvo'))
+
+
 
 # Prepend it to sys.path so Python can find sortn.py there
 if REPO_ROOT not in sys.path:
@@ -40,10 +43,32 @@ print("sys.path:", "\n  ".join(sys.path))
 
 
 
+""" PRIPRAVA ZA PROMETHEUS """
+
+
+num_tracked_people = Gauge('num_tracked_people', 'Number of people tracked')
+
+num_actual_crossings = Gauge('num_actual_crossings', 'Number of people who crossed the middle line')
+num_detected_crossings = Gauge('num_detected_cross', 'Number of people who were detected crossing')
+avg_detected_people_per_frame = Gauge('avg_detected_people_per_frame', 'Average number of people detected per frame')
+cur_detected_people_on_frame = Gauge('cur_detected_people_on_frame', 'Number of people detected on frame currently')
+cur_crossing_prediction_accuracy = Gauge('cur_crossing_prediction_accuracy', 'Current prediction accuracy, based on ')
+
+avg_track_duration_gauge = Gauge('avg_track_duration', 'Average duration of tracking people, in seconds')
+
+
+
+### DONE
+detection_time = Gauge('detection_time', 'Time needed for YOLOv8 to detect humans, in seconds')
+tracking_time = Gauge('tracking_time', 'Time needed for SORT to track humans, in seconds')
+pose_time = Gauge('pose_time', 'Time needed for openpose to detect skeletons, in seconds')
+intent_time = Gauge('intent_time', 'Time needed for intent detection, in seconds')
+process_frame_time = Gauge('process_frame_time', 'Time needed for processing a frame, in seconds')
+
+#TODO: add
+
 """ STATISTICS CLASS """
 
-# TODO: popravi total_people (I think it counts trackers rather than unique trackIDs, I think total crossings also might be wrong??
-#   avg_crossing_percentage is DEFINITELY wrong, active_tracks is not needed? avg_track_duration is also wrong I think?
 
 CENTER_LINE_X = None  # Will be set based on video width
 crossing_records = {}  # track_id: {'last_side': 'left'|'right', 'crossed': bool}
@@ -77,10 +102,10 @@ class Statistics:
         print(f"curSum = {curSum}")
         print(f"actualCrossings = {actual_crossings}")
         if curSum > 0 and actual_crossings > 0:
-            res = curSum / self.actual_crossings * 100
+            res = curSum / actual_crossings * 100
             return res
         else:
-            return "No one crossed"
+            return 0
 
 
     def update_track(self, track_id, frame_idx, bbox, is_crossing_pred):
@@ -127,8 +152,12 @@ class Statistics:
             track['crossing_frames'] += 1
 
     def update_frame(self, frame_idx, num_people, num_crossing_pred):
+        global cur_detected_people_on_frame
         self.frame_count += 1
         self.total_detections += num_people
+
+        cur_detected_people_on_frame.set(num_people)
+
         self.per_frame_stats.append({
             'frame_idx': frame_idx,
             'num_people': num_people,
@@ -137,6 +166,12 @@ class Statistics:
         })
 
     def update_timing(self, frame_idx, detection, tracking, pose, intent, other, total):
+        global detection_time, tracking_time, pose_time, intent_time, process_frame_time
+        detection_time.set(detection)
+        tracking_time.set(tracking)
+        pose_time.set(pose)
+        intent_time.set(intent)
+        process_frame_time.set(total)
         self.timing_data.append({
             'frame_idx': frame_idx,
             'detection': detection,
@@ -148,25 +183,38 @@ class Statistics:
         })
 
     def get_summary(self):
-        print("GETTING SUMMARY")
+
+        global num_tracked_people, num_actual_crossings, avg_detected_people_per_frame, num_detected_crossings, cur_crossing_prediction_accuracy, avg_track_duration_gauge
+
+        #print("GETTING SUMMARY")
         elapsed = time.time() - self.start_time
         unique_tracks = len(self.track_data)
+        num_tracked_people.set(unique_tracks)
 
         # Calculate actual crossings (people who completed crossing)
         actual_crossings = sum(1 for t in self.track_data.values() if t['has_crossed'])
+        num_actual_crossings.set(actual_crossings)
 
-        print("here1")
+
+
+        #print("here1")
 
         # Calculate various metrics
         avg_people_per_sec = self.total_detections / elapsed if elapsed > 0 else 0
+        avg_detected_people_per_frame.set(avg_people_per_sec)
+
+
+        # TODO uncomment
+        num_detected_crossings.set(self.total_crossing_events)
+
         avg_crossings_per_sec = actual_crossings / elapsed if elapsed > 0 else 0
 
-        print("here2")
+        #print("here2")
 
         track_durations = [t['total_frames'] for t in self.track_data.values()]
         avg_track_duration = sum(track_durations) / len(track_durations) if track_durations else 0
 
-        print("here3")
+        #print("here3")
 
 
         # Calculate crossing percentage based on prediction accuracy
@@ -175,7 +223,9 @@ class Statistics:
         else:
             prediction_accuracy = 0
 
-        print("here4")
+        cur_crossing_prediction_accuracy.set(prediction_accuracy)
+
+        #print("here4")
 
         # Timing metrics
         n = len(self.timing_data)
@@ -188,6 +238,8 @@ class Statistics:
             avg_total = sum(t['total'] for t in self.timing_data) / n
         else:
             avg_detection = avg_tracking = avg_pose = avg_intent = avg_other = avg_total = 0.0
+
+        avg_track_duration_gauge.set(round(avg_track_duration, 1))
 
         print(f"AVG DETECTION: {avg_detection}")
         return {
@@ -676,6 +728,7 @@ def processFrames_old(frame, frame_ind, debug=False):
     # 5) intent prediction for any trackID with a full buffer
     predictions = {} # prediction for each ID
     num_crossing = 0 # number of people who are crossing -> for statistics TODO: change
+    stats.get_summary()
     for x1,y1,x2,y2,tid in last_trackers:
         seq = list(rolling_buffer.get(tid, []))
         if len(seq) == 16:
@@ -757,7 +810,7 @@ def publish_frame(client, topic, frame):
     payload = buffer.tobytes()
     client.publish(f"{outputChannel}/frames", payload, qos=1)
 
-def publis_predictions(client, topic, predictions):
+def publish_predictions(client, topic, predictions):
     pass
 
 def publish_statistic(client, topic, stats):
@@ -789,6 +842,7 @@ def on_message(client, userdata, msg):
             output_video_path = f"{output_video_path}_{vid_ind}"
             CENTER_LINE_X = None
     except Exception as e:
+        print(f"{e}\n")
         msg_queue.put(msg)
         print("Received frame in on_message!")
 
@@ -817,7 +871,7 @@ def worker_loop():
             curFrames.append(img)
 
             # on first 16 messages you still only need to call processFrames on the *one* new frame
-            processed, preds = processFrames(img, frame_ind, debug=True)
+            processed, preds = processFrames(img, frame_ind, debug=False)
             initialized = True
 
         except Exception as e:
@@ -836,9 +890,14 @@ def on_connect(client, userdata, flags, rc, properties=None):
 
 server = mqtt.Client(client_id="server", clean_session=True, callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
 
-server.connect(broker, port, 180)
+server.connect(broker, port, 18000)
+#server.max_inflight_messages_set(10000)
+
+
 server.on_connect = on_connect
 server.on_message = on_message
 print("Came to here :)")
 threading.Thread(target=worker_loop, daemon=True).start()
+start_http_server(8000)
+print("Started prometheous http server")
 server.loop_forever()
