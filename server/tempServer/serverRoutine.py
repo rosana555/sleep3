@@ -41,6 +41,7 @@ def main():
     # Uninstall old YOLO versions and install new one
     run([sys.executable, "-m", "pip", "uninstall", "-y", "yolov3_tf2", "keras-yolo3"])
     run([sys.executable, "-m", "pip", "install", "ultralytics"])
+    run([sys.executable, "-m", "pip", "install", "prometheus_client"])
 
     """ TF-pose dependencies setup """
 

@@ -44,38 +44,95 @@ print("sys.path:", "\n  ".join(sys.path))
 
 # TODO: popravi total_people (I think it counts trackers rather than unique trackIDs, I think total crossings also might be wrong??
 #   avg_crossing_percentage is DEFINITELY wrong, active_tracks is not needed? avg_track_duration is also wrong I think?
+
+CENTER_LINE_X = None  # Will be set based on video width
+crossing_records = {}  # track_id: {'last_side': 'left'|'right', 'crossed': bool}
+
+
 class Statistics:
     def __init__(self):
         self.start_time = time.time()
         self.frame_count = 0
         self.total_detections = 0  # Total people detections (bounding boxes)
-        self.total_crossing_events = 0  # Total crossing predictions
+        self.total_crossing_events = 0  # Actual crossing events
         self.track_data = defaultdict(lambda: {
             'first_seen': None,
             'last_seen': None,
             'crossing_frames': 0,
-            'total_frames': 0
+            'total_frames': 0,
+            'has_crossed': False  # Track if this person completed a crossing
         })
         self.per_frame_stats = []
-        self.timing_data = []  # Stores timing metrics per frame
+        self.timing_data = []
 
-    def update_track(self, track_id, frame_idx, is_crossing):
+    def getPredictionAccuracy(self, actual_crossings):
+        curSum = 0
+        print(f"TRACK DATA:\n {self.track_data}")
+        for t in self.track_data.values():
+            print("in track_data.vvalue()")
+            if t['has_crossed'] and t['crossing_frames'] > 0:
+                #curSum += t['total_frames']
+                curSum += 1
+
+        print(f"curSum = {curSum}")
+        print(f"actualCrossings = {actual_crossings}")
+        if curSum > 0 and actual_crossings > 0:
+            res = curSum / self.actual_crossings * 100
+            return res
+        else:
+            return "No one crossed"
+
+
+    def update_track(self, track_id, frame_idx, bbox, is_crossing_pred):
         track = self.track_data[track_id]
         if track['first_seen'] is None:
             track['first_seen'] = frame_idx
+
         track['last_seen'] = frame_idx
         track['total_frames'] += 1
-        if is_crossing:
-            track['crossing_frames'] += 1
-            self.total_crossing_events += 1  # Count crossing events
 
-    def update_frame(self, frame_idx, num_people, num_crossing):
+        # Update crossing status based on actual position
+        x1, y1, x2, y2 = bbox
+        center_x = (x1 + x2) / 2
+
+        print(f"TRACK DATA:\n {track}")
+        print(f"CROSSING RECORDS = {crossing_records}")
+
+
+        # Initialize crossing record for new track
+        if track_id not in crossing_records:
+            crossing_records[track_id] = {
+                'last_side': 'left' if center_x < CENTER_LINE_X else 'right',
+                'crossed': False
+            }
+
+
+
+        current_side = 'left' if center_x < CENTER_LINE_X else 'right'
+        last_side = crossing_records[track_id]['last_side']
+        print(f"Last side: {current_side}, current side: {last_side}")
+
+        # Detect crossing event
+        if not crossing_records[track_id]['crossed'] and current_side != last_side:
+            # Only count crossing if prediction was crossing at some point
+            if is_crossing_pred:
+                self.total_crossing_events += 1
+                track['has_crossed'] = True
+                crossing_records[track_id]['crossed'] = True
+            # Update side regardless of prediction
+            crossing_records[track_id]['last_side'] = current_side
+
+        # Update crossing frames only when prediction says crossing
+        if is_crossing_pred:
+            track['crossing_frames'] += 1
+
+    def update_frame(self, frame_idx, num_people, num_crossing_pred):
         self.frame_count += 1
-        self.total_detections += num_people  # Total people detections
+        self.total_detections += num_people
         self.per_frame_stats.append({
             'frame_idx': frame_idx,
             'num_people': num_people,
-            'num_crossing': num_crossing,
+            'num_crossing_pred': num_crossing_pred,
             'timestamp': time.time()
         })
 
@@ -91,26 +148,34 @@ class Statistics:
         })
 
     def get_summary(self):
+        print("GETTING SUMMARY")
         elapsed = time.time() - self.start_time
-
-        # Unique tracks calculation
         unique_tracks = len(self.track_data)
 
-        # Average people per second
+        # Calculate actual crossings (people who completed crossing)
+        actual_crossings = sum(1 for t in self.track_data.values() if t['has_crossed'])
+
+        print("here1")
+
+        # Calculate various metrics
         avg_people_per_sec = self.total_detections / elapsed if elapsed > 0 else 0
+        avg_crossings_per_sec = actual_crossings / elapsed if elapsed > 0 else 0
 
-        # Average crossings per second
-        avg_crossings_per_sec = self.total_crossing_events / elapsed if elapsed > 0 else 0
+        print("here2")
 
-        # Track durations
         track_durations = [t['total_frames'] for t in self.track_data.values()]
         avg_track_duration = sum(track_durations) / len(track_durations) if track_durations else 0
 
-        # Overall crossing percentage
+        print("here3")
+
+
+        # Calculate crossing percentage based on prediction accuracy
         if self.total_detections > 0:
-            overall_crossing_percentage = (self.total_crossing_events / self.total_detections) * 100
+            prediction_accuracy = self.getPredictionAccuracy(actual_crossings)
         else:
-            overall_crossing_percentage = 0
+            prediction_accuracy = 0
+
+        print("here4")
 
         # Timing metrics
         n = len(self.timing_data)
@@ -124,15 +189,17 @@ class Statistics:
         else:
             avg_detection = avg_tracking = avg_pose = avg_intent = avg_other = avg_total = 0.0
 
+        print(f"AVG DETECTION: {avg_detection}")
         return {
             'elapsed_seconds': round(elapsed, 1),
             'total_frames': self.frame_count,
-            'total_people': unique_tracks,  # Unique tracks
-            'total_crossings': self.total_crossing_events,  # Total crossing events
+            'total_people': unique_tracks,
+            'total_crossings': actual_crossings,  # Actual crossing events
+            'total_detections': self.total_detections,
             'avg_people_per_sec': round(avg_people_per_sec, 2),
             'avg_crossings_per_sec': round(avg_crossings_per_sec, 2),
             'avg_track_duration': round(avg_track_duration, 1),
-            'avg_crossing_percentage': round(overall_crossing_percentage, 1),
+            'crossing_prediction_accuracy': round(prediction_accuracy, 1),
             # Timing metrics
             'avg_detection_time': round(avg_detection, 4),
             'avg_tracking_time': round(avg_tracking, 4),
@@ -141,33 +208,6 @@ class Statistics:
             'avg_other_time': round(avg_other, 4),
             'avg_total_time': round(avg_total, 4)
         }
-
-    def save_to_csv(self, filename="statistics.csv"):
-        # Save per-frame statistics
-        with open(f"per_frame_{filename}", 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=['frame_idx', 'num_people', 'num_crossing', 'timestamp'])
-            writer.writeheader()
-            writer.writerows(self.per_frame_stats)
-
-        # Save track-level statistics
-        with open(f"tracks_{filename}", 'w', newline='') as f:
-            writer = csv.DictWriter(f, fieldnames=[
-                'track_id', 'first_seen', 'last_seen',
-                'total_frames', 'crossing_frames', 'crossing_percentage'
-            ])
-            writer.writeheader()
-            for track_id, data in self.track_data.items():
-                crossing_pct = (data['crossing_frames'] / data['total_frames']) * 100 if data['total_frames'] > 0 else 0
-                writer.writerow({
-                    'track_id': track_id,
-                    'first_seen': data['first_seen'],
-                    'last_seen': data['last_seen'],
-                    'total_frames': data['total_frames'],
-                    'crossing_frames': data['crossing_frames'],
-                    'crossing_percentage': round(crossing_pct, 1)
-                })
-
-
 
 
 """ YOLO SETUP """
@@ -416,7 +456,11 @@ def update_video_writer(frames):
 
 
 def processFrames(frame, frame_ind, debug=False):
-    global mot_tracker, rolling_buffer, stats, track_intent, video_writer
+    global mot_tracker, rolling_buffer, stats, track_intent, video_writer, CENTER_LINE_X
+
+    # Initialize center line on first frame
+    if CENTER_LINE_X is None:
+        CENTER_LINE_X = frame.shape[1] / 2
 
     t_start = time.time()
     img_orig = frame.copy()
@@ -483,18 +527,22 @@ def processFrames(frame, frame_ind, debug=False):
             cv2.imwrite(f"{debug_path}/frame_{frame_ind:06d}_track_{tid}_skeleton.jpg", skeleton)
     t_pose = time.time() - t0
 
-    # 4) intent prediction
+    # 4) intent prediction and crossing detection
     t0 = time.time()
     predictions = {}
-    num_crossing = 0
+    num_crossing_pred = 0
 
-    # First update all tracks with current intent
+    # First get current intent for all tracks
     for x1, y1, x2, y2, tid in last_trackers:
         current_intent = track_intent.get(tid, 0)
-        is_cross = (current_intent == 1)
-        stats.update_track(tid, frame_ind, is_cross)
-        if is_cross:
-            num_crossing += 1
+        print(f"Current intent: {current_intent}")
+        is_cross_pred = (current_intent == 1)
+        if is_cross_pred:
+            num_crossing_pred += 1
+
+        # Update statistics with position and prediction
+        print(f"isCrossingPred {is_cross_pred}")
+        stats.update_track(tid, frame_ind, (x1, y1, x2, y2), is_cross_pred)
 
     # Then process predictions for tracks with full buffer
     for x1, y1, x2, y2, tid in last_trackers:
@@ -504,36 +552,28 @@ def processFrames(frame, frame_ind, debug=False):
             pred = int(pred_func(arr))
             predictions[tid] = pred
             track_intent[tid] = pred
-            is_cross = (pred == 1)
-
-            # Update statistics with new intent
-            stats.update_track(tid, frame_ind, is_cross)
-
-            # Update crossing count if changed
-            if is_cross and not track_intent.get(tid, 0) == 1:
-                num_crossing += 1
-            elif not is_cross and track_intent.get(tid, 0) == 1:
-                num_crossing -= 1
+            is_cross_pred = (pred == 1)
 
             # DEBUG: save prediction data
             if debug and debug_log:
                 np.save(f"{debug_path}/frame_{frame_ind:06d}_track_{tid}_input.npy", arr)
                 mosaic = np.hstack([cv2.resize(f, (50, 50)) for f in seq])
                 cv2.imwrite(f"{debug_path}/frame_{frame_ind:06d}_track_{tid}_sequence.jpg", mosaic)
-                print(f"Track {tid}: {'CROSSING' if is_cross else 'NOT CROSSING'}", file=debug_log)
+                print(f"Track {tid}: {'CROSSING' if is_cross_pred else 'NOT CROSSING'}", file=debug_log)
     t_intent = time.time() - t0
 
-    # 5) annotate frame
+    # 5) annotate frame with center line
+    #cv2.line(img_orig, (int(CENTER_LINE_X), 0), (int(CENTER_LINE_X), img_orig.shape[0]), (0, 255, 0), 2)
     annotated = annotate_frame(img_orig.copy(), last_trackers, track_intent)
 
     # 6) update frame statistics
-    stats.update_frame(frame_ind, len(last_trackers), num_crossing)
+    stats.update_frame(frame_ind, len(last_trackers), num_crossing_pred)
     if debug:
         cv2.imwrite(f"{debug_path}/frame_{frame_ind:06d}_annotated.jpg", annotated)
         summary = {
             'frame': frame_ind,
             'num_tracks': int(len(last_trackers)),
-            'num_crossing': int(num_crossing),
+            'num_crossing_pred': int(num_crossing_pred),
             'predictions': predictions,
         }
         if debug_log:
@@ -546,6 +586,8 @@ def processFrames(frame, frame_ind, debug=False):
         if tid not in active:
             rolling_buffer.pop(tid, None)
             track_intent.pop(tid, None)
+            if tid in crossing_records:
+                crossing_records.pop(tid)
             if debug:
                 with open(f"{debug_path}/cleanup.log", "a") as lg:
                     print(f"Cleaned track {tid}", file=lg)
@@ -745,6 +787,7 @@ def on_message(client, userdata, msg):
             msg_queue = queue.Queue()
             video_writer = None
             output_video_path = f"{output_video_path}_{vid_ind}"
+            CENTER_LINE_X = None
     except Exception as e:
         msg_queue.put(msg)
         print("Received frame in on_message!")
