@@ -134,7 +134,6 @@ class App:
         )
         self.left_panel.config(text=left_text)
 
-        # Right-side global stats
         right_text = (
             f"People: {s.total_people}\n"
             f"Crossings: {s.total_crossings}\n"
