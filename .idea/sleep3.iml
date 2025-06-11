@@ -8,7 +8,7 @@
       <excludeFolder url="file://$MODULE_DIR$/input/.venv" />
       <excludeFolder url="file://$MODULE_DIR$/output/.venv" />
     </content>
-    <orderEntry type="jdk" jdkName="Python 3.9 (input)" jdkType="Python SDK" />
+    <orderEntry type="jdk" jdkName="Python 3.12 (output)" jdkType="Python SDK" />
     <orderEntry type="sourceFolder" forTests="false" />
   </component>
   <component name="PyDocumentationSettings">
