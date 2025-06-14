@@ -21,6 +21,7 @@ class TrackingStatistics:
     avg_crossings_per_sec: float = 0.0
     avg_track_duration: float = 0.0
     crossing_prediction_accuracy: float = 0.0
+    unsure_crossing_events: int = 0
     avg_detection_time: float = 0.0
     avg_tracking_time: float = 0.0
     avg_pose_time: float = 0.0
@@ -137,11 +138,11 @@ class App:
         right_text = (
             f"People: {s.total_people}\n"
             f"Crossings: {s.total_crossings}\n"
-            f"Detections: {s.total_detections}\n"
+            f"Detected crossings: {s.unsure_crossing_events}\n"
             f"People/sec: {s.avg_people_per_sec:.2f}\n"
             f"Crossings/sec: {s.avg_crossings_per_sec:.2f}\n"
             f"Track Duration: {s.avg_track_duration:.2f}s\n"
-            #f"Prediction Accuracy: {s.crossing_prediction_accuracy:.2%}"
+            f"Prediction Accuracy: {s.crossing_prediction_accuracy:.2%}"
         )
         self.right_panel.config(text=right_text)
 
@@ -153,7 +154,14 @@ class App:
         self.mqtt_client.loop_stop()
         self.mqtt_client.disconnect()
 
+def main(test_mode=False):
+    if test_mode:
+        print("Running in test mode.")
+        return
+    else:
+        root = tk.Tk()
+        app = App(root)
+        root.mainloop()
+
 if __name__ == '__main__':
-    root = tk.Tk()
-    app = App(root)
-    root.mainloop()
+    main()

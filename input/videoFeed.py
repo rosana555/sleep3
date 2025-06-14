@@ -131,7 +131,14 @@ class VideoFeed:
         self.send_frame_to_server(-1, -1)
         self.master.destroy()
 
+def main(test_mode=False):
+    if test_mode:
+        print("Running in test mode.")
+        return
+    else:
+        root = tk.Tk()
+        app = VideoFeed(root)
+        root.mainloop()
+
 if __name__ == '__main__':
-    root = tk.Tk()
-    app = VideoFeed(root)
-    root.mainloop()
+    main()
