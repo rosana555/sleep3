@@ -3,6 +3,7 @@ import cv2
 import pytest
 import tkinter as tk
 import json
+import os
 from unittest.mock import patch
 
 from server.tempServer.server import processFrames
@@ -20,6 +21,12 @@ def app_instance():
     yield app
     root.destroy()  # Clean up properly after test
 
+skip_if_headless = pytest.mark.skipif(
+    os.environ.get('DISPLAY', '') == '',
+    reason="Headless environment (no DISPLAY)"
+)
+
+@skip_if_headless
 @pytest.fixture
 def video_feed_instance():
     root = tk.Tk()
