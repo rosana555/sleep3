@@ -39,9 +39,9 @@ jobs:
         if [ -f requirements.txt ]; then
           echo "Found requirements.txt. Installing dependencies..."
           cat requirements.txt
-          pip install -r requirements.txt
+          pip install -r requirenments.txt
         else
-          echo "ERROR: requirements.txt not found!"
+          echo "ERROR: requirenments.txt not found!"
           exit 1
         fi
 
