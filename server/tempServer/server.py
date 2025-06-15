@@ -87,21 +87,31 @@ class Statistics:
         })
         self.per_frame_stats = []
         self.timing_data = []
+        self.unsure_crossing_events = 0
 
     def getPredictionAccuracy(self, actual_crossings):
         curSum = 0
         print(f"TRACK DATA:\n {self.track_data}")
         for t in self.track_data.values():
-            print("in track_data.vvalue()")
+            #print("in track_data.vvalue()")
             if t['has_crossed'] and t['crossing_frames'] > 0:
-                #curSum += t['total_frames']
-                curSum += 1
+                curSum += t['crossing_frames']
+                #curSum += 1
+        # for t in self.track_data.values():
+        #     #print("in track_data.vvalue()")
+        #     if t['crossing_frames'] > 0:
+        #         #curSum += t['crossing_frames']
+        #         curSum += 1
 
         print(f"curSum = {curSum}")
-        print(f"actualCrossings = {actual_crossings}")
-        if curSum > 0 and actual_crossings > 0:
-            res = curSum / actual_crossings * 100
+        print(f"crossing events = {self.unsure_crossing_events}")
+        #print(f"actualCrossings = {actual_crossings}")
+        if self.unsure_crossing_events > 0 and curSum > 0:
+            res = curSum / self.unsure_crossing_events
             return res
+        # if actual_crossings > 0 and curSum > 0:
+        #     res = (actual_crossings / curSum) * 100
+        #     return res
         else:
             return 0
 
@@ -215,8 +225,11 @@ class Statistics:
         # Calculate crossing percentage based on prediction accuracy
         if self.total_detections > 0:
             prediction_accuracy = self.getPredictionAccuracy(actual_crossings)
+            ##prediction_accuracy = actual_crossings / self.total_crossing_events * 100
         else:
             prediction_accuracy = 0
+
+        print(f"PREDICTION ACCURACY: {prediction_accuracy}")
 
         cur_crossing_prediction_accuracy.set(prediction_accuracy)
 
@@ -247,6 +260,7 @@ class Statistics:
             'avg_crossings_per_sec': round(avg_crossings_per_sec, 2),
             'avg_track_duration': round(avg_track_duration, 1),
             'crossing_prediction_accuracy': round(prediction_accuracy, 1),
+            'unsure_crossing_events': self.unsure_crossing_events,
             # Timing metrics
             'avg_detection_time': round(avg_detection, 4),
             'avg_tracking_time': round(avg_tracking, 4),
@@ -608,6 +622,10 @@ def processFrames(frame, frame_ind, debug=False):
                 cv2.imwrite(f"{debug_path}/frame_{frame_ind:06d}_track_{tid}_sequence.jpg", mosaic)
                 print(f"Track {tid}: {'CROSSING' if is_cross_pred else 'NOT CROSSING'}", file=debug_log)
         else:
+            pred = 1
+            predictions[tid] = pred
+            track_intent[tid] = pred
+            is_cross_pred = (pred == 1)
             pass
             #TODO: Žan fix this
     t_intent = time.time() - t0
@@ -664,6 +682,9 @@ def processFrames(frame, frame_ind, debug=False):
         time.time() - t_start
     )
     print(f"FINAL PREDICTIONS: {predictions}")
+
+    if len(predictions) > 0:
+        stats.unsure_crossing_events += len(predictions)
 
     return annotated, predictions
 
@@ -842,16 +863,31 @@ def on_connect(client, userdata, flags, rc, properties=None):
         # Implement reconnection logic here if needed
 
 
-server = mqtt.Client(client_id="server", clean_session=True, callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
 
-server.connect(broker, port, 32000)
-#server.max_inflight_messages_set(10000)
+def start_server():
+    server = mqtt.Client(client_id="server", clean_session=True, callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+
+    server.connect(broker, port, 32000)
+    # server.max_inflight_messages_set(10000)
+
+    server.on_connect = on_connect
+    server.on_message = on_message
+    print("Came to here :)")
+    threading.Thread(target=worker_loop, daemon=True).start()
+    start_http_server(8000)
+    print("Started prometheous http server")
+    server.loop_forever()
+
+def main(test_mode=False):
+
+    if test_mode:
+        print("Running in test mode.")
+        return
+
+    start_server()
+
+if __name__ == "__main__":
+    main()
 
 
-server.on_connect = on_connect
-server.on_message = on_message
-print("Came to here :)")
-threading.Thread(target=worker_loop, daemon=True).start()
-start_http_server(8000)
-print("Started prometheous http server")
-server.loop_forever()
+
