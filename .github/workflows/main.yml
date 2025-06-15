@@ -18,16 +18,34 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout code
+      uses: actions/checkout@v4
+
     - name: Set up Python 3.10
       uses: actions/setup-python@v3
       with:
         python-version: "3.10"
+
+    - name: Debug current directory and files
+      run: |
+        echo "Working directory: $(pwd)"
+        echo "Files in repo root:"
+        ls -la
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
         pip install pytest
-        if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
+        if [ -f requirements.txt ]; then
+          echo "Found requirements.txt. Installing dependencies..."
+          cat requirements.txt
+          pip install -r requirements.txt
+        else
+          echo "ERROR: requirements.txt not found!"
+          exit 1
+        fi
+
     - name: Test with pytest
       run: |
         pytest
+
