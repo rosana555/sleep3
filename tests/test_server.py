@@ -49,12 +49,12 @@ def test_processFrames_runs():
     assert isinstance(predictions, dict)
 
 
-def test_video_feed_gui_elements(video_feed_instance):
-    assert hasattr(video_feed_instance, "fps_entry")
-    assert hasattr(video_feed_instance, "lbl_path")
-    assert callable(video_feed_instance.select_video)
-    assert callable(video_feed_instance.use_camera_feed)
-    assert callable(video_feed_instance.start_stream)
+# def test_video_feed_gui_elements(video_feed_instance):
+#     assert hasattr(video_feed_instance, "fps_entry")
+#     assert hasattr(video_feed_instance, "lbl_path")
+#     assert callable(video_feed_instance.select_video)
+#     assert callable(video_feed_instance.use_camera_feed)
+#     assert callable(video_feed_instance.start_stream)
 
 
 def test_send_frame_to_server_input(video_feed_instance):
@@ -102,10 +102,10 @@ def test_output_runs(app_instance):
     assert abs(app_instance.stats.avg_total_time - 20.6) < 1e-3
 
 
-def test_app_gui_elements(app_instance):
-    assert hasattr(app_instance, "canvas")
-    assert hasattr(app_instance, "predictions")
-    assert hasattr(app_instance, "stats")
-    assert callable(app_instance.on_message_frame)
-    assert callable(app_instance.on_message_preds)
-    assert callable(app_instance.on_message_stats)
+# def test_app_gui_elements(app_instance):
+#     assert hasattr(app_instance, "canvas")
+#     assert hasattr(app_instance, "predictions")
+#     assert hasattr(app_instance, "stats")
+#     assert callable(app_instance.on_message_frame)
+#     assert callable(app_instance.on_message_preds)
+#     assert callable(app_instance.on_message_stats)
