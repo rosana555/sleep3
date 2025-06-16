@@ -10,14 +10,16 @@ port = 1883
 topic = "/input"
 
 
+def init_mqtt():
+    producer.connect(broker, port, 32000)
+
 def on_connect(client, userdata, flags, reasonCode, properties=None):
   print("Povezava z MQTT: " + str(reasonCode))
 
 producer = mqtt.Client(client_id="videoFeed", callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
 producer.max_inflight_messages_set(100000)
-producer.connect(broker, port, 32000) # 40 minutes
+init_mqtt()# 40 minutes
 producer.on_connect = on_connect
-
 
 
 class VideoFeed:
