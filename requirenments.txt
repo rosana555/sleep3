@@ -6,3 +6,4 @@ slidingwindow
 ultralytics 
 prometheus_client
 numba
+filterpy
