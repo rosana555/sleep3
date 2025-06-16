@@ -4,3 +4,4 @@ paho-mqtt
 tensorflow
 slidingwindow
 ultralytics 
+prometheus_client
