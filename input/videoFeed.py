@@ -10,25 +10,26 @@ port = 1883
 topic = "/input"
 
 
-def init_mqtt():
-    producer.connect(broker, port, 32000)
+def init_mqtt(producer):
+    try:
+        producer.connect(broker, port, 5)  # Shorter timeout
+    except Exception as e:
+        print(f"[MQTT Init] Failed to connect: {e}")
 
 def on_connect(client, userdata, flags, reasonCode, properties=None):
   print("Povezava z MQTT: " + str(reasonCode))
 
-producer = mqtt.Client(client_id="videoFeed", callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
-producer.max_inflight_messages_set(100000)
-init_mqtt()# 40 minutes
-producer.on_connect = on_connect
+
 
 
 class VideoFeed:
-    def __init__(self, master):
+    def __init__(self, master, producer):
         self.master = master
         self.master.title("Live Video Feed Simulator")
         self.master.geometry("500x500")
         self.master.resizable(False, False)
         self.master.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.producer = producer
 
         # Container frame to center content
         container = ttk.Frame(master)
@@ -109,7 +110,7 @@ class VideoFeed:
     def send_frame_to_server(self, frame_num, frame):
         if isinstance(frame, int):
             payload = frame
-            ret = producer.publish(topic, payload, qos=1, retain=False)
+            ret = self.producer.publish(topic, payload, qos=1, retain=False)
             print(f"Pošiljanje: sporočilo o koncu, rc={ret.rc}, topic: {topic}")
             return
 
@@ -123,7 +124,7 @@ class VideoFeed:
         payload = buffer.tobytes()
 
         # 3) Publish the bytes
-        ret = producer.publish(topic, payload, qos=1, retain=False)
+        ret = self.producer.publish(topic, payload, qos=1, retain=False)
 
         # 4) Log
         print(f"Pošiljanje: frame {frame_num}  rc={ret.rc}, topic: {topic}")
@@ -142,5 +143,16 @@ def main(test_mode=False):
         app = VideoFeed(root)
         root.mainloop()
 
-if __name__ == '__main__':
-    main()
+def main(test_mode=False):
+    if test_mode:
+        print("Running in test mode.")
+        return
+    else:
+        producer = mqtt.Client(client_id="videoFeed", callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+        producer.max_inflight_messages_set(100000)
+        init_mqtt()  # 40 minutes
+        producer.on_connect = on_connect
+
+        root = tk.Tk()
+        app = VideoFeed(root, producer)
+        root.mainloop()

@@ -5,10 +5,12 @@ import tkinter as tk
 import json
 import os
 from unittest.mock import patch
+from unittest.mock import MagicMock
+from PIL import Image, ImageTk
 
 #from server.tempServer.server import processFrames
 from input.videoFeed import VideoFeed
-from output import App
+from output.output import App
 
 
 # -------- Fixtures -------- #
@@ -26,14 +28,13 @@ skip_if_headless = pytest.mark.skipif(
     reason="Headless environment (no DISPLAY)"
 )
 
-@skip_if_headless
+
 @pytest.fixture
 def video_feed_instance():
     root = tk.Tk()
     root.withdraw()
-    videofeed = VideoFeed(root)
-    yield videofeed
-    root.destroy()
+    dummy_producer = MagicMock()
+    return VideoFeed(root, dummy_producer)
 
 
 # -------- Tests -------- #
@@ -48,7 +49,7 @@ def video_feed_instance():
 #     assert annotated.shape == dummy_frame.shape
 #     assert isinstance(predictions, dict)
 
-
+@skip_if_headless
 def test_video_feed_gui_elements(video_feed_instance):
     assert hasattr(video_feed_instance, "fps_entry")
     assert hasattr(video_feed_instance, "lbl_path")
@@ -56,7 +57,7 @@ def test_video_feed_gui_elements(video_feed_instance):
     assert callable(video_feed_instance.use_camera_feed)
     assert callable(video_feed_instance.start_stream)
 
-
+@skip_if_headless
 def test_send_frame_to_server_input(video_feed_instance):
     dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
     try:
@@ -64,7 +65,7 @@ def test_send_frame_to_server_input(video_feed_instance):
     except Exception as e:
         pytest.fail(f"send_frame_to_server raised an exception: {e}")
 
-
+@skip_if_headless
 def test_output_runs(app_instance):
     dummy_img = np.zeros((480, 640, 3), dtype=np.uint8)
     _, jpeg_bytes = cv2.imencode('.jpg', dummy_img)
@@ -101,7 +102,7 @@ def test_output_runs(app_instance):
     assert app_instance.stats.total_frames == 30
     assert abs(app_instance.stats.avg_total_time - 20.6) < 1e-3
 
-
+@skip_if_headless
 def test_app_gui_elements(app_instance):
     assert hasattr(app_instance, "canvas")
     assert hasattr(app_instance, "predictions")
