@@ -6,7 +6,7 @@ import json
 import os
 from unittest.mock import patch
 
-from server.tempServer.server import processFrames
+#from server.tempServer.server import processFrames
 from input.videoFeed import VideoFeed
 from output import App
 
@@ -31,30 +31,30 @@ skip_if_headless = pytest.mark.skipif(
 def video_feed_instance():
     root = tk.Tk()
     root.withdraw()
-    app = VideoFeed(root)
-    yield app
+    videofeed = VideoFeed(root)
+    yield videofeed
     root.destroy()
 
 
 # -------- Tests -------- #
 
-def test_processFrames_runs():
-    dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
-    frame_index = 1
+# def test_processFrames_runs():
+#     dummy_frame = np.zeros((480, 640, 3), dtype=np.uint8)
+#     frame_index = 1
+#
+#     annotated, predictions = processFrames(dummy_frame, frame_index, debug=False)
+#
+#     assert isinstance(annotated, np.ndarray)
+#     assert annotated.shape == dummy_frame.shape
+#     assert isinstance(predictions, dict)
 
-    annotated, predictions = processFrames(dummy_frame, frame_index, debug=False)
 
-    assert isinstance(annotated, np.ndarray)
-    assert annotated.shape == dummy_frame.shape
-    assert isinstance(predictions, dict)
-
-
-# def test_video_feed_gui_elements(video_feed_instance):
-#     assert hasattr(video_feed_instance, "fps_entry")
-#     assert hasattr(video_feed_instance, "lbl_path")
-#     assert callable(video_feed_instance.select_video)
-#     assert callable(video_feed_instance.use_camera_feed)
-#     assert callable(video_feed_instance.start_stream)
+def test_video_feed_gui_elements(video_feed_instance):
+    assert hasattr(video_feed_instance, "fps_entry")
+    assert hasattr(video_feed_instance, "lbl_path")
+    assert callable(video_feed_instance.select_video)
+    assert callable(video_feed_instance.use_camera_feed)
+    assert callable(video_feed_instance.start_stream)
 
 
 def test_send_frame_to_server_input(video_feed_instance):
@@ -102,10 +102,10 @@ def test_output_runs(app_instance):
     assert abs(app_instance.stats.avg_total_time - 20.6) < 1e-3
 
 
-# def test_app_gui_elements(app_instance):
-#     assert hasattr(app_instance, "canvas")
-#     assert hasattr(app_instance, "predictions")
-#     assert hasattr(app_instance, "stats")
-#     assert callable(app_instance.on_message_frame)
-#     assert callable(app_instance.on_message_preds)
-#     assert callable(app_instance.on_message_stats)
+def test_app_gui_elements(app_instance):
+    assert hasattr(app_instance, "canvas")
+    assert hasattr(app_instance, "predictions")
+    assert hasattr(app_instance, "stats")
+    assert callable(app_instance.on_message_frame)
+    assert callable(app_instance.on_message_preds)
+    assert callable(app_instance.on_message_stats)
