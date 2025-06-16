@@ -5,3 +5,4 @@ tensorflow
 slidingwindow
 ultralytics 
 prometheus_client
+numba
