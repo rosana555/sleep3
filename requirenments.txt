@@ -1,3 +1,7 @@
 opencv-python
 numpy
-json
+paho-mqtt
+tensorflow
+slidingwindow
+ultralytics 
+prometheus_client
