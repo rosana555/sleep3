@@ -32,6 +32,11 @@ jobs:
         echo "Files in repo root:"
         ls -la
 
+    - name: Install tkinter
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y python3-tk
+
     - name: Install dependencies
       run: |
         python -m pip install --upgrade pip
