@@ -53,6 +53,7 @@ avg_detected_people_per_frame = Gauge('avg_detected_people_per_frame', 'Average 
 cur_detected_people_on_frame = Gauge('cur_detected_people_on_frame', 'Number of people detected on frame currently')
 cur_crossing_prediction_accuracy = Gauge('cur_crossing_prediction_accuracy', 'Current prediction accuracy, based on ') #pravilnost deovanja
 
+# čas sledenja frame-u
 avg_track_duration_gauge = Gauge('avg_track_duration', 'Average duration of tracking people, in seconds')
 
 
