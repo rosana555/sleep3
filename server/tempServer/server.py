@@ -47,11 +47,11 @@ print("sys.path:", "\n  ".join(sys.path))
 
 num_tracked_people = Gauge('num_tracked_people', 'Number of people tracked')
 
-num_actual_crossings = Gauge('num_actual_crossings', 'Number of people who crossed the middle line')
+num_actual_crossings = Gauge('num_actual_crossings', 'Number of people who crossed the middle line') # št ljudi, ki prečka
 num_detected_crossings = Gauge('num_detected_cross', 'Number of people who were detected crossing')
 avg_detected_people_per_frame = Gauge('avg_detected_people_per_frame', 'Average number of people detected per frame')
 cur_detected_people_on_frame = Gauge('cur_detected_people_on_frame', 'Number of people detected on frame currently')
-cur_crossing_prediction_accuracy = Gauge('cur_crossing_prediction_accuracy', 'Current prediction accuracy, based on ')
+cur_crossing_prediction_accuracy = Gauge('cur_crossing_prediction_accuracy', 'Current prediction accuracy, based on ') #pravilnost deovanja
 
 avg_track_duration_gauge = Gauge('avg_track_duration', 'Average duration of tracking people, in seconds')
 
