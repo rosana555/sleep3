@@ -47,7 +47,7 @@ print("sys.path:", "\n  ".join(sys.path))
 
 num_tracked_people = Gauge('num_tracked_people', 'Number of people tracked')
 
-num_actual_crossings = Gauge('num_actual_crossings', 'Number of people who crossed the middle line')
+num_actual_crossings = Gauge('num_actual_crossings', 'Number of people who crossed the middle line') # št ljudi, ki prečka
 num_detected_crossings = Gauge('num_detected_cross', 'Number of people who were detected crossing')
 avg_detected_people_per_frame = Gauge('avg_detected_people_per_frame', 'Average number of people detected per frame')
 cur_detected_people_on_frame = Gauge('cur_detected_people_on_frame', 'Number of people detected on frame currently')
@@ -863,31 +863,17 @@ def on_connect(client, userdata, flags, rc, properties=None):
         # Implement reconnection logic here if needed
 
 
+server = mqtt.Client(client_id="server", clean_session=True, callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
 
-def start_server():
-    server = mqtt.Client(client_id="server", clean_session=True, callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
-
-    server.connect(broker, port, 32000)
-    # server.max_inflight_messages_set(10000)
-
-    server.on_connect = on_connect
-    server.on_message = on_message
-    print("Came to here :)")
-    threading.Thread(target=worker_loop, daemon=True).start()
-    start_http_server(8000)
-    print("Started prometheous http server")
-    server.loop_forever()
-
-def main(test_mode=False):
-
-    if test_mode:
-        print("Running in test mode.")
-        return
-
-    start_server()
-
-if __name__ == "__main__":
-    main()
+server.connect(broker, port, 32000)
+#server.max_inflight_messages_set(10000)
 
 
+server.on_connect = on_connect
+server.on_message = on_message
+print("Came to here :)")
+threading.Thread(target=worker_loop, daemon=True).start()
+start_http_server(8000)
+print("Started prometheous http server")
+server.loop_forever()
 
