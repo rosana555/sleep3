@@ -33,7 +33,7 @@ class App:
     def __init__(self, root):
         self.root = root
         self.root.title("MQTT Pedestrian Tracker")
-        self.root.configure(bg="#121212")
+        self.root.configure(bg="#121212") #dark mode
         self.frame_image = None
         self.stats = TrackingStatistics()
         self.predictions = []
