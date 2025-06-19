@@ -75,6 +75,7 @@ class App:
                                       command=self.start_mqtt, bg="#2E8B57", fg="white", width=10)
         self.start_button.pack(side=tk.LEFT, padx=10)
 
+        # dodan stop
         self.stop_button = tk.Button(control_frame, text="Stop", font=("Arial", 11),
                                      command=self.stop_mqtt, bg="#B22222", fg="white", width=10)
         self.stop_button.pack(side=tk.LEFT, padx=10)
