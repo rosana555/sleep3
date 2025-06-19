@@ -177,3 +177,7 @@ cython_debug/
 output_video.avi
 output_video.avi
 sleep3-volvo/
+
+# Ignore train data
+train/dataset/
+train/dataset.zip
