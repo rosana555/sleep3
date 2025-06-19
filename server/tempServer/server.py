@@ -863,31 +863,17 @@ def on_connect(client, userdata, flags, rc, properties=None):
         # Implement reconnection logic here if needed
 
 
+server = mqtt.Client(client_id="server", clean_session=True, callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
 
-def start_server():
-    server = mqtt.Client(client_id="server", clean_session=True, callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
-
-    server.connect(broker, port, 32000)
-    # server.max_inflight_messages_set(10000)
-
-    server.on_connect = on_connect
-    server.on_message = on_message
-    print("Came to here :)")
-    threading.Thread(target=worker_loop, daemon=True).start()
-    start_http_server(8000)
-    print("Started prometheous http server")
-    server.loop_forever()
-
-def main(test_mode=False):
-
-    if test_mode:
-        print("Running in test mode.")
-        return
-
-    start_server()
-
-if __name__ == "__main__":
-    main()
+server.connect(broker, port, 32000)
+#server.max_inflight_messages_set(10000)
 
 
+server.on_connect = on_connect
+server.on_message = on_message
+print("Came to here :)")
+threading.Thread(target=worker_loop, daemon=True).start()
+start_http_server(8000)
+print("Started prometheous http server")
+server.loop_forever()
 

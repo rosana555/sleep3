@@ -150,9 +150,12 @@ def main(test_mode=False):
     else:
         producer = mqtt.Client(client_id="videoFeed", callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
         producer.max_inflight_messages_set(100000)
-        init_mqtt()  # 40 minutes
+        init_mqtt(producer)  # 40 minutes
         producer.on_connect = on_connect
 
         root = tk.Tk()
         app = VideoFeed(root, producer)
         root.mainloop()
+
+if __name__ == '__main__':
+    main()
