@@ -181,3 +181,4 @@ sleep3-volvo/
 # Ignore train data
 train/dataset/
 train/dataset.zip
+.idea/workspace.xml
