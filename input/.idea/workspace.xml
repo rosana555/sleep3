@@ -4,10 +4,7 @@
     <option name="autoReloadType" value="SELECTIVE" />
   </component>
   <component name="ChangeListManager">
-    <list default="true" id="f3911f79-a728-49dd-b880-6351db85a978" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/Dockerfile.videoFeed" beforeDir="false" afterPath="$PROJECT_DIR$/Dockerfile.videoFeed" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/videoFeed.py" beforeDir="false" afterPath="$PROJECT_DIR$/videoFeed.py" afterDir="false" />
-    </list>
+    <list default="true" id="f3911f79-a728-49dd-b880-6351db85a978" name="Changes" comment="" />
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
     <option name="HIGHLIGHT_NON_ACTIVE_CHANGELIST" value="false" />
@@ -16,9 +13,9 @@
   <component name="Git.Settings">
     <option name="RECENT_GIT_ROOT_PATH" value="$PROJECT_DIR$/.." />
   </component>
-  <component name="ProjectColorInfo"><![CDATA[{
-  "associatedIndex": 4
-}]]></component>
+  <component name="ProjectColorInfo">{
+  &quot;associatedIndex&quot;: 4
+}</component>
   <component name="ProjectId" id="2y2tTe8ZBboZULze5yhOZftxbpY" />
   <component name="ProjectViewState">
     <option name="hideEmptyMiddlePackages" value="true" />
@@ -29,7 +26,7 @@
     "Python.main.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "tempVideoFeed",
+    "git-widget-placeholder": "SPPC-94-Grafični-vmesnik-za-output",
     "ignore.virus.scanning.warn.message": "true",
     "last_opened_file_path": "C:/Users/kamen/Documents/DOCUMENTS/School/Projekt/sleep3/server",
     "node.js.detected.package.eslint": "true",

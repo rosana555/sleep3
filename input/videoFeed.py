@@ -7,23 +7,29 @@ import paho.mqtt.client as mqtt
 
 broker = "10.241.227.26"
 port = 1883
-topic = "/data"
+topic = "/input"
 
+
+def init_mqtt(producer):
+    try:
+        producer.connect(broker, port, 5)  # Shorter timeout
+    except Exception as e:
+        print(f"[MQTT Init] Failed to connect: {e}")
 
 def on_connect(client, userdata, flags, reasonCode, properties=None):
   print("Povezava z MQTT: " + str(reasonCode))
 
-producer = mqtt.Client(client_id="videoFeed", callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
-producer.connect(broker, port, 60)
-producer.on_connect = on_connect
+
 
 
 class VideoFeed:
-    def __init__(self, master):
+    def __init__(self, master, producer):
         self.master = master
         self.master.title("Live Video Feed Simulator")
         self.master.geometry("500x500")
         self.master.resizable(False, False)
+        self.master.protocol("WM_DELETE_WINDOW", self.on_close)
+        self.producer = producer
 
         # Container frame to center content
         container = ttk.Frame(master)
@@ -40,7 +46,7 @@ class VideoFeed:
 
         ttk.Label(container, text="Frames per second (fps):").grid(row=3, column=0, sticky="w", pady=(10, 0))
         self.fps_entry = ttk.Entry(container, justify="center")
-        self.fps_entry.insert(0, "1")
+        self.fps_entry.insert(0, "5")
         self.fps_entry.grid(row=4, column=0, sticky="ew")
 
         ttk.Button(container, text="Start Stream", command=self.start_stream).grid(row=5, column=0, pady=10, sticky="ew")
@@ -91,6 +97,7 @@ class VideoFeed:
             if not ret:
                 cap.release()
                 messagebox.showinfo("Done", f"Streamed {frame_num} frames.")
+                self.send_frame_to_server(0, 0)
                 return
 
             self.send_frame_to_server(frame_num, frame)
@@ -101,11 +108,51 @@ class VideoFeed:
         stream_loop()
 
     def send_frame_to_server(self, frame_num, frame):
-        ret = producer.publish(topic, frame, qos=1, retain=False)
-        print("Pošiljanje: " + frame_num + " " + str(ret.rc))
+        if isinstance(frame, int):
+            payload = frame
+            ret = self.producer.publish(topic, payload, qos=1, retain=False)
+            print(f"Pošiljanje: sporočilo o koncu, rc={ret.rc}, topic: {topic}")
+            return
 
-if __name__ == '__main__':
-    root = tk.Tk()
-    app = VideoFeed(root)
-    root.mainloop()
-    root.destroy()
+        # 1) Encode to JPEG
+        success, buffer = cv2.imencode('.jpg', frame)
+        if not success:
+            print(f"Failed to encode frame {frame_num}")
+            return
+
+        # 2) Convert to bytes
+        payload = buffer.tobytes()
+
+        # 3) Publish the bytes
+        ret = self.producer.publish(topic, payload, qos=1, retain=False)
+
+        # 4) Log
+        print(f"Pošiljanje: frame {frame_num}  rc={ret.rc}, topic: {topic}")
+
+    def on_close(self):
+        print("Window is closing.")
+        self.send_frame_to_server(-1, -1)
+        self.master.destroy()
+
+def main(test_mode=False):
+    if test_mode:
+        print("Running in test mode.")
+        return
+    else:
+        root = tk.Tk()
+        app = VideoFeed(root)
+        root.mainloop()
+
+def main(test_mode=False):
+    if test_mode:
+        print("Running in test mode.")
+        return
+    else:
+        producer = mqtt.Client(client_id="videoFeed", callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
+        producer.max_inflight_messages_set(100000)
+        init_mqtt()  # 40 minutes
+        producer.on_connect = on_connect
+
+        root = tk.Tk()
+        app = VideoFeed(root, producer)
+        root.mainloop()
