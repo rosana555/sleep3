@@ -57,7 +57,7 @@ avg_track_duration_gauge = Gauge('avg_track_duration', 'Average duration of trac
 
 
 
-### DONE
+### Poraba modelov
 detection_time = Gauge('detection_time', 'Time needed for YOLOv8 to detect humans, in seconds')
 tracking_time = Gauge('tracking_time', 'Time needed for SORT to track humans, in seconds')
 pose_time = Gauge('pose_time', 'Time needed for openpose to detect skeletons, in seconds')
