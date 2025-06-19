@@ -72,6 +72,7 @@ CENTER_LINE_X = None  # Will be set based on video width
 crossing_records = {}  # track_id: {'last_side': 'left'|'right', 'crossed': bool}
 
 
+#dodan popravek
 class Statistics:
     def __init__(self):
         self.start_time = time.time()
