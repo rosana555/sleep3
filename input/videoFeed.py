@@ -139,19 +139,11 @@ def main(test_mode=False):
         print("Running in test mode.")
         return
     else:
-        root = tk.Tk()
-        app = VideoFeed(root)
-        root.mainloop()
-
-def main(test_mode=False):
-    if test_mode:
-        print("Running in test mode.")
-        return
-    else:
         producer = mqtt.Client(client_id="videoFeed", callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
         producer.max_inflight_messages_set(100000)
         init_mqtt(producer)  # 40 minutes
         producer.on_connect = on_connect
+        producer.loop_start()
 
         root = tk.Tk()
         app = VideoFeed(root, producer)

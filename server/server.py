@@ -2,8 +2,18 @@
 #  also add the KEYPOINT_CONFIDENCE_THRESHOLD = 0.2
 #  And add a GPU check (physical_devices) but dunno if here or if in the routine
 
-import opencv as cv2
+
+import cv2
 import paho.mqtt.client as mqtt
+
+import os
+from pathlib import Path
+
+import cv2
+import numpy as np
+import tensorflow as tf
+import paho.mqtt.client as mqtt
+
 
 
 """ PROCESSING CLASS """

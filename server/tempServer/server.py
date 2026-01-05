@@ -71,6 +71,9 @@ process_frame_time = Gauge('process_frame_time', 'Time needed for processing a f
 CENTER_LINE_X = None  # Will be set based on video width
 crossing_records = {}  # track_id: {'last_side': 'left'|'right', 'crossed': bool}
 
+last_trackers_global = np.zeros((0, 5), dtype=int)
+last_frame_idx_global = 0
+
 
 class Statistics:
     def __init__(self):
@@ -516,60 +519,90 @@ def update_video_writer(frames):
         video_writer.write(frame)
 
 
+"""
+Funkcija `processFrames` obdela en okvir videoposnetka in izvaja naslednje korake:
+1. Detekcija ljudi z uporabo YOLO modela.
+2. Posodabljanje sledilnih ID-jev s pomočjo SORT sledilnika.
+3. Detekcija skeleta za vsako zaznano osebo.
+4. Uporaba denseNet za detekcijo namena.
+5. Anotacija okvirja.
+6. Posodabljanje statistike in pisanje rezultatov v video.
+
+Vhodi:
+- frame (np.ndarray): RGB slika trenutnega video okvirja, ki se obdela.
+- frame_ind (int): Indeks trenutnega okvirja znotraj celotnega videa.
+- debug (bool): Če je `True`, se dodatno shranijo vmesni rezultati in se vodi dnevnik za odpravljanje napak.
+
+Izhodi:
+- annotated (np.ndarray): Okvir z narisanimi rezultati (trackID, skeleti, napovedi ("crossing", "not crossing").
+- predictions (dict[int, int]): Slovar napovedi za vsakega sledilnega ID-ja. Ključ je `track_id`, vrednost je:
+    - 0 = ne bo prečkal,
+    - 1 = bo prečkal.
+"""
+
 def processFrames(frame, frame_ind, debug=False):
     global mot_tracker, rolling_buffer, stats, track_intent, video_writer, CENTER_LINE_X
 
-    # Initialize center line on first frame
+    # Inicializacija sredinske črte, če še ni nastavljena
     if CENTER_LINE_X is None:
         CENTER_LINE_X = frame.shape[1] / 2
 
     t_start = time.time()
     img_orig = frame.copy()
 
-    # Initialize debug_log if needed
+    # Če je omogočen način za odpravljanje napak, inicializiraj log datoteko
     debug_log = None
     if debug:
         os.makedirs(debug_path, exist_ok=True)
         debug_log = open(f"{debug_path}/frame_{frame_ind:06d}_log.txt", "w")
         print(f"\n=== Frame {frame_ind} ===", file=debug_log)
 
-    # 1) human detection
+    # 1) Zaznavanje ljudi v sliki z YOLO modelom
     t0 = time.time()
     detections = detect_humans(img_orig, YOLO_CONFIDENCE_THRESHOLD)
     t_detection = time.time() - t0
 
-    # 2) update tracker & remember trackers
+    # 2) Posodobitev sledilnika (MOT) z novo zaznanimi osebami
     t0 = time.time()
     trackers = mot_tracker.update(detections).astype(int)
     last_trackers = trackers.copy()
     t_tracking = time.time() - t0
 
-    # 3) pose estimation for each tracked person
+    global last_trackers_global, last_frame_idx_global
+    last_trackers_global = last_trackers.copy()
+    last_frame_idx_global = frame_ind
+
+
+
+    # 3) Ocenjevanje poze za vsako sledeno osebo
     t0 = time.time()
     for x1, y1, x2, y2, tid in trackers:
         crop = img_orig[y1:y2, x1:x2]
         if crop.size == 0:
             continue
 
+        # Če je izrez zamegljen, ga izostri
         if is_blurry(crop):
             crop = sharpen_image(crop)
 
+        # Prilagodi velikost izreza in pošlji v model za oceno poze
         crop_resized = resize_with_padding(crop, (432, 368))
         poses = pose_model.inference(
             crop_resized, resize_to_default=False, upsample_size=resize_out_ratio
         )
 
-        # Filter low-score keypoints
+        # Odstrani sklepe z nizko zanesljivostjo
         for h in poses:
             for k in list(h.body_parts):
                 if h.body_parts[k].score < KEYPOINT_CONFIDENCE_THRESHOLD:
                     del h.body_parts[k]
         poses.sort(key=lambda h: h.score, reverse=True)
 
-        # Draw skeleton & overlay
+        # Nariši skelet na izrez
         padded = TfPoseEstimator.draw_humans(crop_resized, poses, imgcopy=True)
         skeleton = remove_padding(padded, crop.shape[:2], (432, 368))
 
+        # Vstavi skelet nazaj v originalni okvir
         target_slice = img_orig[y1:y2, x1:x2]
         th, tw = target_slice.shape[:2]
         try:
@@ -578,22 +611,22 @@ def processFrames(frame, frame_ind, debug=False):
         except cv2.error as e:
             print(f"Skipping skeleton paste for track {tid}: {e}")
 
-        # Update rolling buffer
+        # Posodobi krožni medpomnilnik s trenutno sliko
         buf_img = cv2.resize(img_orig[y1:y2, x1:x2], (100, 100))
         rolling_buffer.setdefault(tid, deque(maxlen=16)).append(buf_img)
 
-        # DEBUG: save crops
+        # DEBUG: Shrani slike izrezov in skeletov
         if debug:
             cv2.imwrite(f"{debug_path}/frame_{frame_ind:06d}_track_{tid}_crop.jpg", crop)
             cv2.imwrite(f"{debug_path}/frame_{frame_ind:06d}_track_{tid}_skeleton.jpg", skeleton)
     t_pose = time.time() - t0
 
-    # 4) intent prediction and crossing detection
+    # 4) Napovedovanje namena (npr. prečkanje) za vsako osebo
     t0 = time.time()
     predictions = {}
     num_crossing_pred = 0
 
-    # First get current intent for all tracks
+    # Pridobi trenutni namen iz prejšnjih sledi
     for x1, y1, x2, y2, tid in last_trackers:
         current_intent = track_intent.get(tid, 0)
         print(f"Current intent: {current_intent}")
@@ -601,11 +634,11 @@ def processFrames(frame, frame_ind, debug=False):
         if is_cross_pred:
             num_crossing_pred += 1
 
-        # Update statistics with position and prediction
+        # Posodobi statistiko s trenutnimi podatki
         print(f"isCrossingPred {is_cross_pred}")
         stats.update_track(tid, frame_ind, (x1, y1, x2, y2), is_cross_pred)
 
-    # Then process predictions for tracks with full buffer
+    # Izvedi napovedi za osebe z dovolj podatki v medpomnilniku
     for x1, y1, x2, y2, tid in last_trackers:
         seq = list(rolling_buffer.get(tid, []))
         if len(seq) == 16:
@@ -613,28 +646,26 @@ def processFrames(frame, frame_ind, debug=False):
             pred = int(pred_func(arr))
             predictions[tid] = pred
             track_intent[tid] = pred
-            is_cross_pred = (pred == 1) #also think this is useless and could just be replaced w pred
+            is_cross_pred = (pred == 1)
 
-            # DEBUG: save prediction data
+            # DEBUG: Shrani vhodne podatke in napovedi
             if debug and debug_log:
                 np.save(f"{debug_path}/frame_{frame_ind:06d}_track_{tid}_input.npy", arr)
                 mosaic = np.hstack([cv2.resize(f, (50, 50)) for f in seq])
                 cv2.imwrite(f"{debug_path}/frame_{frame_ind:06d}_track_{tid}_sequence.jpg", mosaic)
                 print(f"Track {tid}: {'CROSSING' if is_cross_pred else 'NOT CROSSING'}", file=debug_log)
         else:
-            pred = 1
+            # Privzeta napoved (TODO komentar nakazuje, da je to začasno)
+            pred = 0
             predictions[tid] = pred
             track_intent[tid] = pred
             is_cross_pred = (pred == 1)
-            pass
-            #TODO: Žan fix this
     t_intent = time.time() - t0
 
-    # 5) annotate frame with center line
-    #cv2.line(img_orig, (int(CENTER_LINE_X), 0), (int(CENTER_LINE_X), img_orig.shape[0]), (0, 255, 0), 2)
+    # 5) Priprava anotiranega okvirja z narisanimi rezultati
     annotated = annotate_frame(img_orig.copy(), last_trackers, track_intent)
 
-    # 6) update frame statistics
+    # 6) Posodobi statistiko okvirja
     stats.update_frame(frame_ind, len(last_trackers), num_crossing_pred)
     if debug:
         cv2.imwrite(f"{debug_path}/frame_{frame_ind:06d}_annotated.jpg", annotated)
@@ -647,6 +678,8 @@ def processFrames(frame, frame_ind, debug=False):
         if debug_log:
             print("Summary:", summary, file=debug_log)
             debug_log.close()
+
+    # Povzetek napovedi
     summary = {
         'frame': frame_ind,
         'num_tracks': int(len(last_trackers)),
@@ -655,7 +688,7 @@ def processFrames(frame, frame_ind, debug=False):
     }
     print(f"SUMMARY: {summary}")
 
-    # 7) cleanup old tracks
+    # 7) Počisti stare sledi, ki niso več aktivne
     active = {int(t[4]) for t in last_trackers}
     for tid in list(rolling_buffer):
         if tid not in active:
@@ -667,7 +700,7 @@ def processFrames(frame, frame_ind, debug=False):
                 with open(f"{debug_path}/cleanup.log", "a") as lg:
                     print(f"Cleaned track {tid}", file=lg)
 
-    # 8) write to video
+    # 8) Zapiši v video
     update_video_writer([annotated])
 
     # Record timing breakdown
@@ -693,13 +726,12 @@ def processFrames(frame, frame_ind, debug=False):
 """ INICIALIZACIJA MQTT """
 
 broker = "10.241.227.26" #TODO: spremeni za mqtt broker (prev: 10.241.227.26)
-port = 1883
-inputChannel = "/input"
-outputChannel = "/output"
+port = 1883 #privzeti port za mqtt broker
+inputChannel = "/input" # kanal, kjer server pridobiva slike
+outputChannel = "/output" # kanal, na katerega server pošilja rezultate
 
 
 curFrames = deque(maxlen=16)  # Automatically discards oldest when >16
-#stats = Statistics()
 initialized = False
 frame_ind = 0
 msg_queue = queue.Queue()
@@ -775,6 +807,73 @@ def publish_statistic():
     except Exception as e:
         print(f"Error publishing statistics: {e}")
 
+def publish_bboxes(frame_idx=None, trackers=None, include_intent=True):
+    """
+    Publish bounding boxes with tracking IDs for the current frame.
+
+    Payload:
+    {
+      "frame": <int>,
+      "tracks": [
+         {"id": <int>, "bbox_xyxy": [x1,y1,x2,y2], "center": [cx,cy], "intent": 0|1}
+      ]
+    }
+    """
+    global last_trackers_global, last_frame_idx_global, track_intent
+
+    try:
+        # Allow explicit args OR fall back to latest saved
+        if frame_idx is None:
+            frame_idx = int(last_frame_idx_global)
+        if trackers is None:
+            trackers = last_trackers_global
+
+        if trackers is None:
+            trackers = np.zeros((0, 5), dtype=int)
+
+        tracks_out = []
+        for tr in np.asarray(trackers).astype(int):
+            if tr.shape[0] < 5:
+                continue
+
+            x1, y1, x2, y2, tid = map(int, tr[:5])
+
+            # Skip invalid boxes
+            if x2 <= x1 or y2 <= y1:
+                continue
+
+            item = {
+                "id": int(tid),
+                "corners": {
+                    "ul": [x1, y1],
+                    "ur": [x2, y1],
+                    "ll": [x1, y2],
+                    "lr": [x2, y2],
+                }
+            }
+
+            if include_intent:
+                item["intent"] = int(track_intent.get(int(tid), 0))
+
+            tracks_out.append(item)
+
+        payload_obj = {
+            "frame": int(frame_idx),
+            "tracks": tracks_out
+        }
+
+        payload = json.dumps(payload_obj)
+
+        print("=== PUBLISHING BBOXES PAYLOAD ===")
+        print(payload)
+        print("================================")
+
+        ret = server.publish(f"{outputChannel}/bboxes", payload, qos=1, retain=False)
+        print(f"Sent bboxes: frame={frame_idx}, n={len(tracks_out)}, rc={ret.rc}")
+
+    except Exception as e:
+        print(f"Error publishing bboxes: {e}")
+
 
 def on_message(client, userdata, msg):
     global curFrames, stats, initialized, frame_ind, msg_queue, output_video_path, video_writer, vid_ind
@@ -847,6 +946,13 @@ def worker_loop():
                 publish_statistic()
             except Exception as e:
                 pass
+
+            try:
+                print("Publishing BBOXES")
+                publish_bboxes()
+            except Exception as e:
+                pass
+
             initialized = True
 
         except Exception as e:
@@ -863,12 +969,10 @@ def on_connect(client, userdata, flags, rc, properties=None):
         # Implement reconnection logic here if needed
 
 
+
 server = mqtt.Client(client_id="server", clean_session=True, callback_api_version=mqtt.CallbackAPIVersion.VERSION2)
 
 server.connect(broker, port, 32000)
-#server.max_inflight_messages_set(10000)
-
-
 server.on_connect = on_connect
 server.on_message = on_message
 print("Came to here :)")
