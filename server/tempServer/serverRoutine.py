@@ -69,7 +69,8 @@ def main():
     os.environ["PATH"] = str(swig_dir) + os.pathsep + os.environ["PATH"]
 
     run([str(swig_path), "-python", "-c++", "pafprocess.i"], cwd=paf_path)
-    run(["python", "setup.py", "build_ext", "--inplace"], cwd=paf_path)
+    #run(["python", "setup.py", "build_ext", "--inplace"], cwd=paf_path)
+    run([sys.executable, "setup.py", "build_ext", "--inplace"], cwd=paf_path)
 
     # Check for compiled file
     compiled_files = [

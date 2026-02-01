@@ -5,16 +5,10 @@
   </component>
   <component name="ChangeListManager">
     <list default="true" id="b11945d1-3fdc-4908-bd0c-96663025acfc" name="Changes" comment="">
-      <change beforePath="$PROJECT_DIR$/../.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../.idea/sleep3.iml" beforeDir="false" afterPath="$PROJECT_DIR$/../.idea/sleep3.iml" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/../.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../input/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../input/.idea/workspace.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../input/videoFeed.py" beforeDir="false" afterPath="$PROJECT_DIR$/../input/videoFeed.py" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/misc.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/misc.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/server.iml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/server.iml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/.idea/vcs.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/vcs.xml" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/server.py" beforeDir="false" afterPath="$PROJECT_DIR$/server.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tempServer/server.py" beforeDir="false" afterPath="$PROJECT_DIR$/tempServer/server.py" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/tempServer/serverRoutine.py" beforeDir="false" afterPath="$PROJECT_DIR$/tempServer/serverRoutine.py" afterDir="false" />
     </list>
@@ -40,7 +34,7 @@
     "Python.serverRoutine.executor": "Run",
     "RunOnceActivity.ShowReadmeOnStart": "true",
     "RunOnceActivity.git.unshallow": "true",
-    "git-widget-placeholder": "SPPC-101-User-story-stop-display",
+    "git-widget-placeholder": "main",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -68,6 +62,7 @@
       <workItem from="1749049492271" duration="287000" />
       <workItem from="1767370671132" duration="5456000" />
       <workItem from="1767646968636" duration="651000" />
+      <workItem from="1769088336543" duration="1025000" />
     </task>
     <servers />
   </component>

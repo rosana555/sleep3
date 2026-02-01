@@ -1,0 +1,23 @@
+# ninja log v6
+4	125	7909849516698628	CMakeFiles/floCIC.dir/main.cpp.obj.ddi	bc3534789465e804
+125	156	7909849518172067	CMakeFiles/floCIC.dir/CXX.dd	9eba0642738b320f
+125	156	7909849518172067	C:/Users/kamen/Documents/DOCUMENTS/School/Projekt/sleep3/floCIC/cmake-build-mscv/CMakeFiles/floCIC.dir/CXXModules.json	9eba0642738b320f
+125	156	7909849518172067	CMakeFiles/floCIC.dir/main.cpp.obj.modmap	9eba0642738b320f
+156	1180	7909849518226562	CMakeFiles/floCIC.dir/main.cpp.obj	bb5ba3aac9524de1
+1180	1363	7909849528461822	floCIC.exe	50c39953a90585c9
+9	418	7909947719192120	CMakeFiles/floCIC.dir/main.cpp.obj.ddi	bc3534789465e804
+419	466	7909947723293442	CMakeFiles/floCIC.dir/CXX.dd	9eba0642738b320f
+419	466	7909947723293442	C:/Users/kamen/Documents/DOCUMENTS/School/Projekt/sleep3/floCIC/cmake-build-mscv/CMakeFiles/floCIC.dir/CXXModules.json	9eba0642738b320f
+419	466	7909947723293442	CMakeFiles/floCIC.dir/main.cpp.obj.modmap	9eba0642738b320f
+467	1496	7909947723769068	CMakeFiles/floCIC.dir/main.cpp.obj	bb5ba3aac9524de1
+1496	1661	7909947734058737	floCIC.exe	50c39953a90585c9
+7	111	7909948169474072	CMakeFiles/floCIC.dir/main.cpp.obj.ddi	bc3534789465e804
+112	136	7909948170521791	CMakeFiles/floCIC.dir/CXX.dd	9eba0642738b320f
+112	136	7909948170521791	C:/Users/kamen/Documents/DOCUMENTS/School/Projekt/sleep3/floCIC/cmake-build-mscv/CMakeFiles/floCIC.dir/CXXModules.json	9eba0642738b320f
+112	136	7909948170521791	CMakeFiles/floCIC.dir/main.cpp.obj.modmap	9eba0642738b320f
+6	124	7909948478814144	CMakeFiles/floCIC.dir/main.cpp.obj.ddi	bc3534789465e804
+125	148	7909948480006605	CMakeFiles/floCIC.dir/CXX.dd	9eba0642738b320f
+125	148	7909948480006605	C:/Users/kamen/Documents/DOCUMENTS/School/Projekt/sleep3/floCIC/cmake-build-mscv/CMakeFiles/floCIC.dir/CXXModules.json	9eba0642738b320f
+125	148	7909948480006605	CMakeFiles/floCIC.dir/main.cpp.obj.modmap	9eba0642738b320f
+149	1027	7909948480246113	CMakeFiles/floCIC.dir/main.cpp.obj	bb5ba3aac9524de1
+1027	1139	7909948489029457	floCIC.exe	50c39953a90585c9

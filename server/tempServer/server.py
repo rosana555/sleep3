@@ -12,11 +12,16 @@ from collections import deque, defaultdict
 import queue, threading
 import json
 from prometheus_client import start_http_server, Counter, Gauge
+import subprocess
+
 
 REPO_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__),
                                          '..',    # up from tempServer
                                          '..',    # up from server
                                          'sleep3-volvo'))
+
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+FLOCIC_EXE = os.path.abspath(os.path.join(BASE_DIR, "..", "..", "floCIC", "cmake-build-mscv","floCIC.exe"))
 
 
 
@@ -65,6 +70,84 @@ intent_time = Gauge('intent_time', 'Time needed for intent detection, in seconds
 process_frame_time = Gauge('process_frame_time', 'Time needed for processing a frame, in seconds')
 
 
+def parse_flocic_header(payload: bytes):
+    if len(payload) < 14:
+        raise ValueError("payload too small for flocic header")
+
+    height = int.from_bytes(payload[0:2], "big", signed=False)
+    # c0, cLast not needed for reshape
+    n = int.from_bytes(payload[10:14], "big", signed=False)
+
+    if height <= 0 or n <= 0 or (n % height) != 0:
+        raise ValueError(f"invalid header: height={height}, n={n}")
+
+    width = n // height
+    return width, height
+
+def flocic_decompress(payload: bytes) -> np.ndarray:
+    w, h = parse_flocic_header(payload)
+
+    p = subprocess.Popen(
+        [FLOCIC_EXE, "--decompress"],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+    raw, err = p.communicate(input=payload)
+
+    if p.returncode != 0:
+        raise RuntimeError(f"flocic failed rc={p.returncode}: {err.decode('utf-8', errors='replace')}")
+
+    if len(raw) != w * h:
+        raise RuntimeError(f"bad decompressed size: got={len(raw)} expected={w*h}")
+
+    gray = np.frombuffer(raw, dtype=np.uint8).reshape((h, w))
+    bgr = cv2.cvtColor(gray, cv2.COLOR_GRAY2BGR)
+    return bgr
+
+def flocic_compress_bgr(frame_bgr: np.ndarray) -> bytes:
+    if frame_bgr is None or frame_bgr.size == 0:
+        raise ValueError("empty frame")
+
+    h, w = frame_bgr.shape[:2]
+
+    gray = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2GRAY)
+
+    raw = gray.tobytes()
+    if len(raw) != w * h:
+        raise RuntimeError(f"bad raw gray size: got={len(raw)} expected={w*h}")
+
+    p = subprocess.Popen(
+        [FLOCIC_EXE, "--compress", str(w), str(h)],
+        stdin=subprocess.PIPE,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE
+    )
+    out, err = p.communicate(input=raw)
+
+    if p.returncode != 0:
+        raise RuntimeError(f"flocic compress failed rc={p.returncode}: {err.decode('utf-8', errors='replace')}")
+
+    if len(out) < 14:
+        raise RuntimeError(f"compressed output too small: {len(out)} bytes")
+
+    return out
+
+
+def flocic_roundtrip_check(compressed: bytes, frame_bgr_original: np.ndarray, max_abs_diff=0):
+    """
+    compress -> decompress -> compare grayscale.
+    max_abs_diff=0 means bit-exact grayscale
+    """
+    back = flocic_decompress(compressed)  # returns BGR from decompressed gray
+    g0 = cv2.cvtColor(frame_bgr_original, cv2.COLOR_BGR2GRAY)
+    g1 = cv2.cvtColor(back, cv2.COLOR_BGR2GRAY)
+    diff = cv2.absdiff(g0, g1)
+    m = int(diff.max())
+    if m > max_abs_diff:
+        raise RuntimeError(f"roundtrip mismatch: max_abs_diff={m}")
+
+
 """ STATISTICS CLASS """
 
 
@@ -73,6 +156,8 @@ crossing_records = {}  # track_id: {'last_side': 'left'|'right', 'crossed': bool
 
 last_trackers_global = np.zeros((0, 5), dtype=int)
 last_frame_idx_global = 0
+
+
 
 
 class Statistics:
@@ -365,7 +450,7 @@ def load_densenet_model():
         pass
 
     # Fallback to JSON loading
-    with open(f'{sleep3volvo_path}/densenet_model.json', 'r') as f:
+    with open(f'{sleep3volvo_path}/densenet_model.json', 'rb') as f:
         model = tf.keras.models.model_from_json(
             f.read(),
             custom_objects={'Model': tf.keras.Model}
@@ -383,6 +468,13 @@ def pred_func(X_test):
 
   return Y
 
+def publish_frame_compressed(frame_bgr: np.ndarray):
+    try:
+        payload = flocic_compress_bgr(frame_bgr)  # bytes
+        ret = server.publish(f"{outputChannel}/frames", payload, qos=1, retain=False)
+        print(f"Sent COMPRESSED frame: {len(payload)} bytes, rc={ret.rc}")
+    except Exception as e:
+        print(f"Error compressing/publishing frame: {e}")
 
 
 """ PROCESIRANJE """
@@ -730,6 +822,13 @@ port = 1883 #privzeti port za mqtt broker
 inputChannel = "/input" # kanal, kjer server pridobiva slike
 outputChannel = "/output" # kanal, na katerega server pošilja rezultate
 
+GYRO_TOPIC = "/output/gyro"
+
+gyro_lock = threading.Lock()
+
+last_gyro_g = None        # npr. (gx, gy, gz) ali dict
+brake_state = None        # zadnji veljaven B (0/1)
+_last_brake_state = None  # interno: za detekcijo spremembe
 
 curFrames = deque(maxlen=16)  # Automatically discards oldest when >16
 initialized = False
@@ -742,12 +841,12 @@ vid_ind = 0
 def publish_frame(frame):
     if isinstance(frame, int):
         payload = frame
-        ret = server.publish(f"{outputChannel}/frames", payload, qos=1, retain=False)
+        ret = server.publish(f"{outputChannel}/frames_bmp", payload, qos=1, retain=False)
         print(f"Pošiljanje: sporočilo o koncu, rc={ret.rc}, topic: {outputChannel}/frames")
         return
 
     # 1) Encode to JPEG
-    success, buffer = cv2.imencode('.jpg', frame)
+    success, buffer = cv2.imencode('.bmp', frame)
     if not success:
         print(f"Failed to encode frame")
         return
@@ -808,21 +907,10 @@ def publish_statistic():
         print(f"Error publishing statistics: {e}")
 
 def publish_bboxes(frame_idx=None, trackers=None, include_intent=True):
-    """
-    Publish bounding boxes with tracking IDs for the current frame.
-
-    Payload:
-    {
-      "frame": <int>,
-      "tracks": [
-         {"id": <int>, "bbox_xyxy": [x1,y1,x2,y2], "center": [cx,cy], "intent": 0|1}
-      ]
-    }
-    """
     global last_trackers_global, last_frame_idx_global, track_intent
+    global brake_state, last_gyro_g, gyro_lock
 
     try:
-        # Allow explicit args OR fall back to latest saved
         if frame_idx is None:
             frame_idx = int(last_frame_idx_global)
         if trackers is None:
@@ -831,6 +919,11 @@ def publish_bboxes(frame_idx=None, trackers=None, include_intent=True):
         if trackers is None:
             trackers = np.zeros((0, 5), dtype=int)
 
+        # preberi gyro/brake atomarno
+        with gyro_lock:
+            bs = brake_state
+            g = last_gyro_g
+
         tracks_out = []
         for tr in np.asarray(trackers).astype(int):
             if tr.shape[0] < 5:
@@ -838,7 +931,6 @@ def publish_bboxes(frame_idx=None, trackers=None, include_intent=True):
 
             x1, y1, x2, y2, tid = map(int, tr[:5])
 
-            # Skip invalid boxes
             if x2 <= x1 or y2 <= y1:
                 continue
 
@@ -853,20 +945,26 @@ def publish_bboxes(frame_idx=None, trackers=None, include_intent=True):
             }
 
             if include_intent:
-                item["intent"] = int(track_intent.get(int(tid), 0))
+                # Če brake state obstaja, ga uporabi kot intent, sicer fallback na model
+                if bs in (0, 1):
+                    item["intent"] = int(bs)
+                else:
+                    item["intent"] = int(track_intent.get(int(tid), 0))
+
+            # (opcijsko) per-track dodaj brakeState ločeno, če želiš
+            item["brakeState"] = None if bs is None else int(bs)
 
             tracks_out.append(item)
 
         payload_obj = {
             "frame": int(frame_idx),
-            "tracks": tracks_out
+            "tracks": tracks_out,
+            # (opcijsko) top-level vrednosti (koristno za debug/telemetrijo)
+            "brakeState": None if bs is None else int(bs),
+            "gyroG": None if g is None else [int(g[0]), int(g[1]), int(g[2])],
         }
 
         payload = json.dumps(payload_obj)
-
-        print("=== PUBLISHING BBOXES PAYLOAD ===")
-        print(payload)
-        print("================================")
 
         ret = server.publish(f"{outputChannel}/bboxes", payload, qos=1, retain=False)
         print(f"Sent bboxes: frame={frame_idx}, n={len(tracks_out)}, rc={ret.rc}")
@@ -875,32 +973,99 @@ def publish_bboxes(frame_idx=None, trackers=None, include_intent=True):
         print(f"Error publishing bboxes: {e}")
 
 
-def on_message(client, userdata, msg):
-    global curFrames, stats, initialized, frame_ind, msg_queue, output_video_path, video_writer, vid_ind
 
-    try:
-        payload = msg.payload.decode("utf-8")
-        if payload.strip() == "-1":
-            print("\n===================================== END =====================================\n")
-            print(f"{stats.get_summary()}")
-            return
-        elif payload.strip() == "0":
-            print(f"\n############################  DONE RECEIVING VIDEO #{vid_ind}   ##############################\n")
-            print(f"{stats.get_summary()}")
-            print("##################################################################################")
-            vid_ind += 1
-            curFrames = deque(maxlen=16)
-            stats = Statistics()
-            initialized = False
-            frame_ind = 0
-            msg_queue = queue.Queue()
-            video_writer = None
-            output_video_path = f"{output_video_path}_{vid_ind}"
-            CENTER_LINE_X = None
-    except Exception as e:
-        print(f"{e}\n")
-        msg_queue.put(msg)
-        print("Received frame in on_message!")
+def on_message(client, userdata, msg):
+    global curFrames, stats, initialized, frame_ind, msg_queue, output_video_path, video_writer, vid_ind, CENTER_LINE_X
+    global last_gyro_g, brake_state, _last_brake_state
+
+    # ------------- GYRO TOPIC HANDLER -------------
+    if msg.topic == GYRO_TOPIC:
+        try:
+            payload = msg.payload.decode("utf-8", errors="replace").strip()
+            if not payload:
+                return
+
+            # Primeri:
+            # "G,-1600,100,-8800"
+            # "B,1"
+            parts = [p.strip() for p in payload.split(",")]
+            if not parts:
+                return
+
+            kind = parts[0]
+
+            if kind == "G":
+                # Pričakujemo 3 vrednosti
+                if len(parts) >= 4:
+                    gx = int(parts[1])
+                    gy = int(parts[2])
+                    gz = int(parts[3])
+                    with gyro_lock:
+                        last_gyro_g = (gx, gy, gz)
+                # (po želji: log)
+                # print(f"[GYRO] G={last_gyro_g}")
+
+            elif kind == "B":
+                # Pričakujemo 0 ali 1
+                if len(parts) >= 2:
+                    b = int(parts[1])
+                    if b not in (0, 1):
+                        return
+
+                    # shrani samo ob spremembi
+                    with gyro_lock:
+                        if _last_brake_state is None or b != _last_brake_state:
+                            brake_state = b
+                            _last_brake_state = b
+                            print(f"[GYRO] Brake changed -> B={b}")
+                        # else: ignoriraj, ker ni spremembe
+
+            else:
+                # neznan tip
+                return
+
+        except Exception as e:
+            print(f"[GYRO] Error parsing gyro payload: {e}")
+        return
+
+    # ------------- INPUT FRAMES HANDLER -------------
+    # Od tu naprej tvoja obstoječa logika (inputChannel) ostane praktično enaka
+
+    payload = msg.payload  # bytes
+
+    # Handle control messages as bytes (no UTF-8 decoding)
+    if payload == b"-1":
+        print("\n===================================== END =====================================\n")
+        print(f"{stats.get_summary()}")
+        return
+
+    if payload == b"0":
+        print(f"\n############################  DONE RECEIVING VIDEO #{vid_ind}   ##############################\n")
+        print(f"{stats.get_summary()}")
+        print("##################################################################################")
+
+        vid_ind += 1
+        curFrames = deque(maxlen=16)
+        stats = Statistics()
+        initialized = False
+        frame_ind = 0
+
+        while True:
+            try:
+                msg_queue.get_nowait()
+                msg_queue.task_done()
+            except queue.Empty:
+                break
+
+        video_writer = None
+        output_video_path = f"output_video_{vid_ind}.avi"
+        CENTER_LINE_X = None
+        return
+
+    # Otherwise it's a frame: queue it
+    msg_queue.put(msg)
+
+
 
 
 def worker_loop():
@@ -912,13 +1077,23 @@ def worker_loop():
             frame_ind += 1
             print(f"Received message {frame_ind}")
 
-            img = cv2.imdecode(
+            bmp_img = cv2.imdecode(
                 np.frombuffer(msg.payload, dtype=np.uint8),
                 cv2.IMREAD_COLOR
             )
+
+            try:
+                img = flocic_decompress(msg.payload)
+            except Exception as e:
+                print(f"Decompression failed on frame {frame_ind}: {e}")
+                continue
+
             if img is None or img.size==0:
                 print("Bad frame, skipping")
                 continue
+
+            if frame_ind % 50 == 0:
+                cv2.imwrite(f"debug_decompressed_{frame_ind}.png", img)
 
             #if not initialized:
             #    init_video_writer(img)
@@ -931,7 +1106,8 @@ def worker_loop():
             print("Publishing predictions")
             try:
                 print("Publishing FRAME")
-                publish_frame(processed)
+                publish_frame_compressed(processed)
+                publish_frame(bmp_img)
             except Exception as e:
                 pass
 
@@ -964,9 +1140,11 @@ def on_connect(client, userdata, flags, rc, properties=None):
     if rc == 0:
         print("Connected successfully")
         client.subscribe(inputChannel, qos=1)
+        client.subscribe(GYRO_TOPIC, qos=1)
+        print(f"Subscribed to {inputChannel} and {GYRO_TOPIC}")
     else:
         print(f"Connection failed with code {rc}")
-        # Implement reconnection logic here if needed
+
 
 
 

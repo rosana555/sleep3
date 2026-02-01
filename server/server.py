@@ -1,7 +1,7 @@
 # TODO: add all the flags
 #  also add the KEYPOINT_CONFIDENCE_THRESHOLD = 0.2
 #  And add a GPU check (physical_devices) but dunno if here or if in the routine
-
+import threading
 
 import cv2
 import paho.mqtt.client as mqtt
@@ -106,6 +106,8 @@ broker = "10.241.227.26" #TODO: spremeni za mqtt broker (prev: 10.241.227.26)
 port = 1883
 inputChannel = "/input"
 outputChannel = "/output"
+
+
 
 def on_message(client, userdata, msg):
     processed = msg.payload.decode().upper()

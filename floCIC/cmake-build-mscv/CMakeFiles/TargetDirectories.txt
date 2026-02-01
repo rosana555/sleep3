@@ -1,0 +1,3 @@
+C:/Users/kamen/Documents/DOCUMENTS/School/Projekt/sleep3/floCIC/cmake-build-mscv/CMakeFiles/floCIC.dir
+C:/Users/kamen/Documents/DOCUMENTS/School/Projekt/sleep3/floCIC/cmake-build-mscv/CMakeFiles/edit_cache.dir
+C:/Users/kamen/Documents/DOCUMENTS/School/Projekt/sleep3/floCIC/cmake-build-mscv/CMakeFiles/rebuild_cache.dir
